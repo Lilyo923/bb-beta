@@ -1,0 +1,13 @@
+LES MUSIQUES NE SONT PAS DANS CETTE ARCHIVE.
+
+Elles n'ont pas change depuis le prototype 23 : si tu les as deja deposees sur
+ton depot, il n'y a rien a faire. Ce zip ne contient aucun fichier .m4a, donc
+il ne peut rien ecraser.
+
+Si tu repars de zero, ce sont les deux archives du prototype 23 :
+  brad-bitt-musiques-1-sur-2.zip
+  brad-bitt-musiques-2-sur-2.zip
+
+Trois musiques n'ont jamais ete fournies et le jeu les attend toujours :
+mini-kirby.m4a, mega-kirby.m4a, generique.m4a. Sans elles, les mini-boss, le
+combat final et le generique se jouent en silence, sans planter.
