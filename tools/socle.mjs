@@ -105,7 +105,13 @@ export async function demarrer(opts = {}) {
     null, { timeout: 20000 });
   // Le jeu ne charge ses planches qu'apres l'ecran d'accueil : c'est ce clic
   // qui autorise l'audio.
-  await page.evaluate(() => lancerDemarrage());
+  // Prototype 28 : avant l'heure, le compte a rebours tient le jeu ferme. La
+  // suite entre par l'interieur. (Ligne ajoutee sans avoir pu etre executee :
+  // pas de Node sur la machine ou elle a ete ecrite.)
+  await page.evaluate(() => {
+    if (typeof compteVerrouille === 'function' && compteVerrouille()) ouvrirLeJeuCompte(true);
+    lancerDemarrage();
+  });
   await page.waitForFunction(() => Object.keys(sprites).length > 0, null, { timeout: 30000 });
   await page.waitForTimeout(1200);
 
@@ -125,7 +131,13 @@ export async function relancerPage(page) {
   await page.waitForFunction(
     () => typeof NIVEAUX === 'object' && !!NIVEAUX.niveau5 && typeof sprites === 'object',
     null, { timeout: 20000 });
-  await page.evaluate(() => lancerDemarrage());
+  // Prototype 28 : avant l'heure, le compte a rebours tient le jeu ferme. La
+  // suite entre par l'interieur. (Ligne ajoutee sans avoir pu etre executee :
+  // pas de Node sur la machine ou elle a ete ecrite.)
+  await page.evaluate(() => {
+    if (typeof compteVerrouille === 'function' && compteVerrouille()) ouvrirLeJeuCompte(true);
+    lancerDemarrage();
+  });
   await page.waitForFunction(() => Object.keys(sprites).length > 0, null, { timeout: 30000 });
   await page.waitForTimeout(600);
 }

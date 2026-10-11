@@ -165,6 +165,13 @@ function auClavier(e) {
   const gauche = e.code === 'ArrowLeft', droite = e.code === 'ArrowRight';
 
   switch (scene) {
+    /* LE COMPTE A REBOURS. Ce `case` et son `return` sont le verrou du clavier :
+       sans eux, une scene inconnue tomberait dans le code de la scene de jeu,
+       tout en bas — ou la touche R relance un niveau. */
+    case 'compte':
+      toucheCompte(e, lettre, annuler);
+      return;
+
     case 'accueil':
       if (valider) lancerDemarrage();
       return;

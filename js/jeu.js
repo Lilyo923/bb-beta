@@ -2557,6 +2557,7 @@ function rendu() {
   zones.length = 0;                    // les zones cliquables sont reconstruites
 
   switch (scene) {
+    case 'compte':    dessinerCompte(); break;
     case 'accueil':   dessinerAccueil(); break;
     case 'logos':     dessinerEcranLogos(); break;
     case 'menu':      dessinerMenu(); break;
@@ -2591,7 +2592,8 @@ function rendu() {
 
   souris.survol = zoneSousSouris();
   souris.bouge = false;             // consomme apres usage par les menus
-  canvas.style.cursor = souris.survol ? 'pointer' : 'default';
+  // Une zone « discrete » se clique sans s'annoncer : le curseur ne change pas.
+  canvas.style.cursor = (souris.survol && !souris.survol.discret) ? 'pointer' : 'default';
   majAffichageTactile();
 }
 
@@ -2747,6 +2749,8 @@ function imageDuJeu(maintenant) {
       majRamassages(PAS);
       majCamera(PAS);
       majTransition(PAS);
+    } else if (scene === 'compte') {
+      majCompte(PAS);
     } else if (scene === 'logos') {
       majDemarrage(PAS);
     } else if (scene === 'menu' || scene === 'options' || scene === 'credits'

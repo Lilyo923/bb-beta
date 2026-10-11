@@ -1,7 +1,8 @@
 /* =============================================================================
    BRAD BITT — la suite de verification qui tourne DANS LE NAVIGATEUR
 
-   Nee au prototype 26 (sections A a O), etendue au prototype 27 (P a U). Elle
+   Nee au prototype 26 (sections A a O), etendue au prototype 27 (P a U) puis
+   au prototype 28 (W a Z : le compte a rebours — elles passent en premier). Elle
    s'appelait tools/verif-26.js : un nom de prototype sur une suite qui vit
    au-dela du prototype, c'etait un nom qui allait mentir.
 
@@ -11,7 +12,8 @@
 
    LANCER
      1. python3 tools/serveur.py            (ou --edition finale)
-     2. ouvrir http://localhost:8126/ — inutile de cliquer sur « Jouer »
+     2. ouvrir http://localhost:8126/ — inutile de cliquer sur « Jouer », ni
+        d'avoir un code : la suite passe le compte a rebours par l'interieur
      3. dans la console du navigateur :
           var s = document.createElement('script'); s.src = 'tools/verif-navigateur.js';
           document.head.appendChild(s);
@@ -132,6 +134,461 @@
   };
   const dansLaBase = () => { entrerHub(false); avancer(0.1); };
 
+  /* =========================================================================
+     LE COMPTE A REBOURS (prototype 28) — sections W a Z. ELLES PASSENT EN
+     PREMIER : ce qu'elles verifient d'abord, c'est qu'avant l'heure rien du
+     jeu n'a demarre ni ete telecharge. Une fois le jeu ouvert pour les
+     sections A a V, ce n'est plus mesurable.
+
+     Elles ne dependent pas de la date du jour : elles posent leur propre heure
+     d'ouverture (dans quarante-sept jours) et remettent la vraie en sortant.
+     Apres le 27 novembre 2026 elles tournent donc toujours.
+
+     AUCUN CODE N'EST ECRIT ICI. Ce dossier est publie avec le jeu : un code
+     ecrit dans un fichier de test est un code publie. Les deux codes d'essai
+     de la section X sont inventes, et leur empreinte n'est dans la table que
+     le temps de cette section. La section X verifie d'ailleurs qu'aucun
+     fichier publie ne contient un mot dont l'empreinte est dans la table —
+     celui-ci compris.
+  ========================================================================= */
+  const aLeCompte = typeof compte !== 'undefined' && typeof COMPTE !== 'undefined';
+  const ouvertureVraie = aLeCompte ? COMPTE.ouverture : 0;
+  const dateVraie = Date.now;
+  const JOUR = 86400e3;
+  const pistesAuDepart = audio.pistes.size;
+  const dejaPassee = !!window.__verif;       // la suite a deja tourne dans cette page
+
+  // De VRAIS evenements de pointeur, envoyes au canvas : ils passent par tous
+  // les ecouteurs du jeu, comme un doigt ou une souris.
+  const pointeur = (type, x, y) => {
+    const r = canvas.getBoundingClientRect();
+    canvas.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, pointerId: 1,
+      clientX: r.left + x * r.width / LARGEUR, clientY: r.top + y * r.height / HAUTEUR }));
+  };
+  const clic = (x, y) => { pointeur('pointerdown', x, y); dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 })); };
+  const clicZone = z => clic(z.x + z.w / 2, z.y + z.h / 2);
+  const taper = texte => { for (const c of texte) appui(/[0-9]/.test(c) ? 'Digit' + c : 'Key' + c.toUpperCase(), c.toLowerCase()); };
+
+  // « Ferme » : le compte a rebours tient, et RIEN du jeu n'a bouge derriere.
+  const ferme = () => scene === 'compte' && compte.actif && !demarrage.lance && audio.pistes.size === pistesAuDepart;
+  const zoneE = () => zones.find(z => z.action === 'compte-e');
+  const poserOuverture = ms => { COMPTE.ouverture = heureCompte() + ms; compte.secondeVue = null; };
+  const reverrouiller = () => {
+    compte.ouvertParCode = false;
+    Object.assign(compte.saisie, { ouverte: false, texte: '', message: '', messageT: 0, succes: false, essais: 0, blocage: 0 });
+    compte.apercu = null; compte.ouverture = 0; compte.accesDans = 0; compte.toastT = 0; compte.flash = 0;
+    confettis.length = 0;
+    verrouillerCompte();
+    avancer(0.1);
+  };
+  const ouvrirLeChamp = () => { avancer(1 / 60); const z = zoneE(); if (z) clicZone(z); avancer(1 / 60); };
+  const bouton = action => { const z = zones.find(q => q.action === action); if (z) clicZone(z); avancer(1 / 60); return !!z; };
+
+  if (!aLeCompte) {
+    ecrire('\nW–Z. LE COMPTE À REBOURS');
+    verifier('le module du compte à rebours est chargé', false, 'js/compte.js absent de cette version');
+  } else if (!BETA) {
+    ecrire('\nW–Z. LE COMPTE À REBOURS');
+    verifier('pas de compte à rebours dans la version finale', !compte.actif && scene !== 'compte' && !compteVerrouille(), scene);
+    synchroniserCompte();
+    verifier('… et elle ne demande l\'heure à personne', compte.source === 'appareil' && !synchroEnCours, compte.source);
+  } else {
+    /* ======================================================================= */
+    await section('W. LE COMPTE À REBOURS : LE VERROU', async () => {
+      if (heureCompte() >= ouvertureVraie) {
+        ecrire('  (la bêta est ouverte : rien à vérifier « au chargement »)');
+      } else if (dejaPassee) {
+        ecrire('  (la suite a déjà tourné dans cette page : recharger pour vérifier « au chargement »)');
+      } else {
+        const auChargement = scene === 'compte' && compte.actif && !compte.ouvertParCode;
+        verifier('avant l\'heure, la page s\'ouvre sur le compte à rebours', auChargement, scene);
+        verifier('… rien du jeu n\'a démarré : ni logos, ni chargement', !demarrage.lance && demarrage.finChargement < 0);
+        verifier('… aucune musique n\'a été téléchargée', audio.pistes.size === 0, audio.pistes.size);
+        const images = Object.keys(planchesBrad).length + Object.keys(sprites).length;
+        verifier('… quatre images au plus : Brad et trois Serra, pour le décor', images <= 4, images);
+      }
+
+      // A partir d'ici, l'heure d'ouverture est celle de la suite.
+      poserOuverture(47 * JOUR + 5 * 3600e3);
+      reverrouiller();
+      verifier('le verrou se pose', ferme(), scene);
+
+      // 1. LE CLAVIER — chaque touche, appuyee, tenue, relachee.
+      const touches = [];
+      for (const l of 'abcdefghijklmnopqrstuvwxyz') touches.push(['Key' + l.toUpperCase(), l]);
+      for (let i = 0; i < 10; i++) touches.push(['Digit' + i, String(i)], ['Numpad' + i, String(i)]);
+      for (let i = 1; i <= 12; i++) touches.push(['F' + i, 'F' + i]);
+      for (const c of ['Space', 'Enter', 'NumpadEnter', 'Escape', 'Tab', 'Backspace', 'Delete', 'ArrowUp',
+                       'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'ControlLeft',
+                       'AltLeft', 'Home', 'End', 'PageUp', 'PageDown']) touches.push([c, c === 'Space' ? ' ' : c]);
+      let fuites = [];
+      for (const [code, key] of touches) {
+        appui(code, key); appui(code, key, true); relache(code, key); avancer(1 / 60);
+        if (!ferme() || compte.saisie.ouverte) { fuites.push(code); reverrouiller(); }
+      }
+      verifier('aucune des ' + touches.length + ' touches n\'ouvre le jeu ni le champ de code', fuites.length === 0, fuites);
+      verifier('Échap n\'y fait pas non plus sortir du plein écran', appui('Escape').defaut === false);
+
+      // 2. LA SOURIS — toute la surface, sauf la lettre.
+      avancer(1 / 60);
+      const zE = zoneE();
+      verifier('une seule chose se touche à l\'écran : la lettre « Ê »', zones.length === 1 && !!zE, zones.map(z => z.action));
+      verifier('… une zone étroite, sur la ligne du titre',
+               !!zE && zE.w < 24 && zE.h < 26 && zE.y > 60 && zE.y < 100 && zE.discret === true, zE && [zE.x, zE.y, zE.w, zE.h, zE.discret]);
+      let clics = 0; fuites = [];
+      for (let y = 2; y < HAUTEUR; y += 6) {
+        for (let x = 2; x < LARGEUR; x += 6) {
+          if (zE && x >= zE.x - 1 && x <= zE.x + zE.w + 1 && y >= zE.y - 1 && y <= zE.y + zE.h + 1) continue;
+          clic(x, y); clics++;
+          if (!ferme() || compte.saisie.ouverte) { fuites.push([x, y]); reverrouiller(); }
+        }
+        avancer(1 / 60);
+      }
+      verifier(clics + ' clics sur tout l\'écran, hors de la lettre : rien ne s\'ouvre', fuites.length === 0, fuites.slice(0, 5));
+      if (zE) { pointeur('pointermove', zE.x + zE.w / 2, zE.y + zE.h / 2); avancer(2 / 60); }
+      verifier('le curseur ne se change pas en main au-dessus de la lettre',
+               canvas.style.cursor === 'default' && !!souris.survol && souris.survol.action === 'compte-e', canvas.style.cursor);
+      pointeur('pointermove', 5, 5); avancer(1 / 60);
+
+      // 3. LE RESTE DE CE QU'UN NAVIGATEUR PEUT ENVOYER.
+      const courseAvant = courseAuto.actif;
+      zoneTactile.querySelectorAll('.tbtn').forEach(b => {
+        b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+        b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+      });
+      if (courseAuto.actif !== courseAvant) basculerCourseAuto();
+      avancer(0.1);
+      verifier('les boutons tactiles sont cachés, et n\'ouvrent rien', zoneTactile.hidden === true && ferme());
+      canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 240, bubbles: true, cancelable: true }));
+      canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+      for (const n of ['blur', 'focus', 'resize', 'pagehide', 'contextmenu']) dispatchEvent(new Event(n));
+      avancer(0.2);
+      verifier('ni la molette, ni le double-clic, ni un changement de fenêtre', ferme());
+
+      // 4. PAR LE CODE DU JEU LUI-MEME.
+      lancerDemarrage(); avancer(0.2);
+      verifier('« Jouer », appelé directement, ne démarre rien', ferme());
+      // Et si l'ecran d'accueil s'affichait malgre tout — par un defaut qu'on
+      // n'a pas vu — il resterait inerte tant que le compte tient.
+      scene = 'accueil'; avancer(1 / 60);
+      clic(12, 12); appui('Space', ' '); appui('Enter'); avancer(0.2);
+      const inerte = !demarrage.lance && scene === 'accueil';
+      scene = 'compte'; avancer(1 / 60);
+      verifier('… et l\'écran d\'accueil lui-même resterait inerte', inerte && ferme());
+
+      // 5. AU HASARD — touches, clics, et la lettre elle-meme : le champ
+      // s'ouvre, on y tape n'importe quoi, on valide.
+      let graine = 28;
+      const alea = () => { graine = (Math.imul(graine, 1664525) + 1013904223) >>> 0; return graine / 4294967296; };
+      let ouvertures = 0, sorti = false;
+      for (let i = 0; i < 4000 && !sorti; i++) {
+        const r = alea();
+        if (r < 0.45) { const [code, key] = touches[Math.floor(alea() * touches.length)]; appui(code, key); relache(code, key); }
+        else if (r < 0.9) clic(alea() * LARGEUR, alea() * HAUTEUR);
+        else { const z = zoneE(); if (z) { clicZone(z); ouvertures++; } }
+        if (i % 3 === 0) avancer(1 / 60);
+        if (scene !== 'compte' || !compte.actif || demarrage.lance) sorti = true;
+      }
+      verifier('4 000 gestes au hasard, champ de code compris : le jeu reste fermé',
+               !sorti && ouvertures > 20 && audio.pistes.size === pistesAuDepart, [scene, ouvertures]);
+      reverrouiller();
+    });
+
+    /* ======================================================================= */
+    await section('X. LE COMPTE À REBOURS : LES CODES', async () => {
+      verifier('SHA-256 : les trois valeurs de référence',
+               sha256Hex('abc') === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+               && sha256Hex('') === 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+               && sha256Hex('abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq')
+                  === '248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1');
+      if (window.crypto && crypto.subtle && typeof TextEncoder === 'function') {
+        let pareil = true;
+        for (const t of ['bradbitt-compte:A', 'x'.repeat(55), 'y'.repeat(56), 'z'.repeat(64), 'w'.repeat(119), 'v'.repeat(1000)]) {
+          const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+          const hex = Array.from(new Uint8Array(b)).map(o => o.toString(16).padStart(2, '0')).join('');
+          if (hex !== sha256Hex(t)) pareil = false;
+        }
+        verifier('… et le même résultat que le navigateur, sur six longueurs pièges', pareil);
+      } else ecrire('  (page ouverte hors serveur local : pas de crypto.subtle pour comparer)');
+
+      const cles = Object.keys(COMPTE.codes);
+      verifier('la table ne contient que deux empreintes — jamais un code',
+               cles.length === 2 && cles.every(c => /^[0-9a-f]{64}$/.test(c))
+               && cles.map(c => COMPTE.codes[c]).sort().join() === 'apercu,jouer', cles.length);
+
+      /* AUCUN CODE EN CLAIR DANS CE QUI EST PUBLIE. On ne peut pas chercher un
+         mot qu'on n'a pas le droit d'ecrire ; on fait donc l'inverse : chaque
+         mot de chaque fichier (et chaque paire de mots voisins, pour un code
+         ecrit en deux morceaux) passe par la meme fonction que le champ de
+         saisie. Si l'un d'eux ouvre quelque chose, il est ecrit en clair.
+         Un mot TEMOIN, que l'on sait present, prouve que la recherche voit. */
+      const temoin = sha256Hex(COMPTE.sel + 'BRADDY3000');
+      COMPTE.codes[temoin] = 'temoin';
+      const fichiers = new Set(Array.from(document.scripts).map(s => s.getAttribute('src')).filter(Boolean)
+        .concat(['index.html', 'style.css', 'README.md', 'diagnostic-audio.html', 'tools/verif-navigateur.js',
+                 'tools/empreinte_code.py', 'tools/serveur.py', 'tools/beta_brad.py', 'assets/audio/LISEZ-MOI.txt']));
+      const vus = new Set(), enClair = [];
+      let lus = 0, temoins = 0;
+      try {
+        for (const f of fichiers) {
+          let texte = '';
+          try { const r = await fetch(f, { cache: 'no-store' }); if (!r.ok) continue; texte = await r.text(); }
+          catch (e) { continue; }
+          lus++;
+          const mots = texte.toUpperCase().match(/[A-Z0-9]+/g) || [];
+          for (let i = 0; i < mots.length; i++) {
+            for (const m of [mots[i], mots[i] + (mots[i + 1] || '')]) {
+              if (m.length > COMPTE.longueurCode || vus.has(m)) continue;
+              vus.add(m);
+              const effet = COMPTE.codes[sha256Hex(COMPTE.sel + m)];
+              if (effet === 'temoin') temoins++;
+              else if (effet) enClair.push(f + ' (un mot de ' + m.length + ' caractères)');
+            }
+          }
+        }
+      } finally { delete COMPTE.codes[temoin]; }
+      verifier('la recherche d\'un code en clair voit bien : elle retrouve son mot témoin', temoins > 0 && lus >= 30, [temoins, lus]);
+      verifier('aucun des deux codes n\'est écrit dans les ' + lus + ' fichiers publiés', enClair.length === 0, enClair);
+      ecrire('        (' + vus.size + ' mots et paires de mots essayés)');
+
+      // DEUX CODES D'ESSAI, inventes, le temps de la section.
+      const ESSAI_JOUER = 'ESSAIJOUER', ESSAI_APERCU = 'ESSAIAPERCU';
+      const eJ = sha256Hex(COMPTE.sel + ESSAI_JOUER), eA = sha256Hex(COMPTE.sel + ESSAI_APERCU);
+      COMPTE.codes[eJ] = 'jouer'; COMPTE.codes[eA] = 'apercu';
+      const clesStockage = () => { try { return Object.keys(localStorage).sort().join('|'); } catch (e) { return ''; } };
+      const stockageAvant = clesStockage();
+      try {
+        poserOuverture(47 * JOUR + 5 * 3600e3);
+        reverrouiller();
+        verifier('majuscules, minuscules, espaces et tirets : c\'est le même code',
+                 effetDuCode(' essai-Jouer ') === 'jouer' && effetDuCode('ESSAIJOUE') === null
+                 && effetDuCode('ESSAIJOUERX') === null && effetDuCode('') === null);
+
+        ouvrirLeChamp();
+        verifier('un clic sur le « Ê » ouvre le champ de code', compte.saisie.ouverte === true);
+        verifier('… et tant qu\'il est ouvert, la lettre n\'est plus là et le fond avale les clics',
+                 !zoneE() && zones.length > 0 && zones[0].action === 'compte-fond', zones.slice(0, 2).map(z => z.action));
+        taper('zqsd');
+        verifier('on y tape au clavier', compte.saisie.texte === 'ZQSD', compte.saisie.texte);
+        appui('Backspace');
+        verifier('Retour arrière efface une lettre', compte.saisie.texte === 'ZQS', compte.saisie.texte);
+        taper('abcdefghijklmnop');
+        verifier('douze caractères au plus', compte.saisie.texte.length === COMPTE.longueurCode, compte.saisie.texte.length);
+        appui('Enter'); avancer(0.1);
+        verifier('un mauvais code : « Code inconnu. », et rien ne s\'ouvre',
+                 compte.saisie.message === 'Code inconnu.' && compte.saisie.ouverte && ferme(), compte.saisie.message);
+        taper('non'); appui('Enter'); taper('nonplus'); appui('Enter'); avancer(0.1);
+        const bloque = compte.saisie.blocage > 0;
+        taper(ESSAI_JOUER); appui('Enter'); avancer(0.1);
+        verifier('trois erreurs de suite : le champ se tait — même le bon code attend',
+                 bloque && compte.saisie.texte === '' && ferme() && !(compte.accesDans > 0), [compte.saisie.blocage, compte.saisie.texte]);
+        avancer(8.2);
+        verifier('… huit secondes, puis il reprend', compte.saisie.blocage === 0 && compte.saisie.ouverte, compte.saisie.blocage);
+
+        const touche = c => { const z = zones.find(q => q.action === 'compte-touche' && q.valeur === c); if (z) clicZone(z); };
+        avancer(1 / 60); touche('B'); touche('7');
+        verifier('le clavier dessiné à l\'écran écrit aussi (téléphone)', compte.saisie.texte === 'B7', compte.saisie.texte);
+        bouton('compte-effacer');
+        verifier('« Effacer » retire une lettre', compte.saisie.texte === 'B', compte.saisie.texte);
+        clic(8, 8); avancer(1 / 60);
+        verifier('un clic à côté du panneau ne ferme rien et n\'ouvre rien', compte.saisie.ouverte && ferme());
+        bouton('compte-fermer');
+        verifier('« Fermer » referme, et vide le champ', !compte.saisie.ouverte && compte.saisie.texte === '');
+        ouvrirLeChamp(); taper('x');
+        const echap = appui('Escape'); avancer(1 / 60);
+        verifier('Échap referme le champ, sans faire sortir du plein écran', !compte.saisie.ouverte && echap.defaut === false);
+
+        // LE CODE D'APERCU
+        ouvrirLeChamp(); taper(ESSAI_APERCU.toLowerCase()); appui('Enter'); avancer(0.1);
+        const r0 = resteCompte();
+        verifier('le code d\'aperçu lance la dernière minute et demie',
+                 !!compte.apercu && !compte.saisie.ouverte && r0 > 88 && r0 <= 90, r0);
+        verifier('… le jeu reste fermé, et l\'onglet garde le vrai compte', ferme() && /^J-47 · /.test(document.title), document.title);
+        appui('Escape'); avancer(0.1);
+        verifier('Échap interrompt l\'aperçu : retour au vrai compte à rebours',
+                 !compte.apercu && resteCompte() > 46 * 86400 && ferme(), resteCompte());
+        ouvrirLeChamp(); taper(ESSAI_APERCU); bouton('compte-valider'); avancer(0.1);
+        verifier('« Valider », à la souris, vaut Entrée', !!compte.apercu && !compte.saisie.ouverte);
+        compte.apercu.fin = performance.now() - 1; avancer(0.3);
+        const effet = compte.ouverture > 0 && !zoneE() && ferme();
+        lancerDemarrage();
+        avancer(COMPTE.dureeOuverture + 0.3);
+        verifier('à zéro, l\'aperçu joue l\'ouverture… et revient au compte : il n\'ouvre PAS le jeu',
+                 effet && !compte.apercu && !(compte.ouverture > 0) && ferme() && resteCompte() > 46 * 86400,
+                 [effet, scene, compte.actif]);
+
+        // LE CODE D'ACCES
+        ouvrirLeChamp(); taper(ESSAI_JOUER); appui('Enter'); avancer(0.1);
+        verifier('le bon code : « Accès accordé. »', compte.saisie.message === 'Accès accordé.' && compte.accesDans > 0, compte.saisie.message);
+        avancer(1.2);
+        verifier('… et l\'écran d\'accueil s\'ouvre', scene === 'accueil' && !compte.actif && compte.ouvertParCode === true, scene);
+        verifier('… l\'onglet reprend le nom du jeu', document.title === compte.titreOnglet, document.title);
+        appliquerHeureCompte(); avancer(0.2);
+        verifier('… l\'heure du serveur ne referme pas derrière celui qui a le code', scene === 'accueil' && !compte.actif);
+        verifier('… rien n\'est retenu dans le navigateur : le code se retape à chaque visite', clesStockage() === stockageAvant);
+      } finally {
+        delete COMPTE.codes[eJ]; delete COMPTE.codes[eA];
+      }
+      verifier('les codes d\'essai sont retirés de la table', Object.keys(COMPTE.codes).length === 2);
+      reverrouiller();
+      verifier('et l\'on referme : le verrou reprend comme au premier instant', ferme() && !compte.ouvertParCode, scene);
+    });
+
+    /* ======================================================================= */
+    await section('Y. LE COMPTE À REBOURS : LE COMPTEUR ET LA DERNIÈRE MINUTE', async () => {
+      /* La date est ecrite deux fois : en chiffres pour la machine
+         (OUVERTURE_BETA, js/edition.js) et en lettres pour l'ecran
+         (COMPTE.dateLisible). Si l'on change l'une sans l'autre, l'ecran
+         annonce une heure et le jeu en applique une autre. */
+      const morceaux = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'long',
+        year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: false }).formatToParts(new Date(ouvertureVraie));
+      const m = t => (morceaux.find(x => x.type === t) || { value: '' }).value;
+      const attendue = m('day') + ' ' + m('month').toUpperCase() + ' ' + m('year') + ' À ' + m('hour') + ' H';
+      verifier('la date écrite à l\'écran est celle de l\'ouverture, à l\'heure de Paris',
+               COMPTE.dateLisible === attendue && m('minute') === '00', [COMPTE.dateLisible, attendue, m('minute')]);
+      poserOuverture(47 * JOUR + 5 * 3600e3); reverrouiller();
+      verifier('l\'onglet annonce « J-47 »', /^J-47 · /.test(document.title), document.title);
+      poserOuverture(5 * 3600e3 + 3 * 60e3 + 30e3); avancer(0.1);
+      verifier('… puis les heures : « 5 h 03 »', /^5 h 03 · /.test(document.title), document.title);
+      poserOuverture(125e3 - 400); avancer(0.1);
+      verifier('… puis les minutes : « 02:05 »', /^02:05 · /.test(document.title), document.title);
+
+      let cote = 0, suite = 0, plat = 0;
+      const polices = new Set();
+      for (let s = COMPTE.derniereMinute; s >= 0; s--) {
+        const a = alluresFinale(s);
+        if (a[0].police === a[1].police || a[0].couleur === a[1].couleur) cote++;
+        for (let r = 0; r < 2; r++) {
+          polices.add(a[r].police);
+          const deg = Math.abs(a[r].angle) * 180 / Math.PI;
+          if (deg < 4 || deg > 24.1) plat++;
+          if (s < COMPTE.derniereMinute) {
+            const avant = alluresFinale(s + 1)[r];
+            if (a[r].police === avant.police || a[r].couleur === avant.couleur) suite++;
+          }
+        }
+      }
+      verifier('dernière minute : jamais la même police ni la même couleur côte à côte', cote === 0, cote);
+      verifier('… ni deux secondes de suite pour le même chiffre', suite === 0, suite);
+      verifier('… chaque chiffre est penché, de 4 à 24 degrés', plat === 0, plat);
+      verifier('… les douze polices servent', polices.size === POLICES_FINALE.length && polices.size === 12, polices.size);
+      verifier('… le tirage d\'une seconde ne change pas pendant la seconde',
+               JSON.stringify(alluresFinale(37)) === JSON.stringify(alluresFinale(37)));
+      const allures = new Set(POLICES_FINALE.filter(p => p !== 'BLOCS').map(p => {
+        ctx.font = p.replace('{t}', '100');
+        return Math.round(ctx.measureText('8').width) + (p.indexOf('italic') >= 0 ? 'i' : 'd');
+      }));
+      verifier('… sur cette machine, au moins six allures vraiment différentes (plus les blocs)', allures.size >= 6, allures.size);
+
+      /* L'ENCRE. Chaque chiffre des soixante et une secondes est dessine seul
+         sur un fond uni, et l'on regarde quels pixels ont change : c'est la
+         place qu'il prend VRAIMENT, police du systeme et rotation comprises. */
+      const k = canvas.width / LARGEUR;
+      const encre = dessin => {
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ff00ff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.restore();
+        dessin();
+        const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        let h = 1e9, b = -1, g = 1e9, dr = -1;
+        for (let y = 0; y < canvas.height; y++) {
+          for (let x = 0; x < canvas.width; x++) {
+            const i = (y * canvas.width + x) * 4;
+            if (Math.abs(d[i] - 255) + d[i + 1] + Math.abs(d[i + 2] - 255) > 24) {
+              if (y < h) h = y; if (y > b) b = y; if (x < g) g = x; if (x > dr) dr = x;
+            }
+          }
+        }
+        return { h: h / k, b: b / k, g: g / k, d: dr / k };
+      };
+      const hors = []; let collisions = 0;
+      for (let s = COMPTE.derniereMinute; s >= 0; s--) {
+        const a = alluresFinale(s), taille = s <= 10 ? 150 : 124;
+        // Le tremblement des dix dernieres secondes compris : deux pixels.
+        const A = encre(() => dessinerChiffreFinale(Math.floor(s / 10), LARGEUR / 2 - FINALE_ECART + 2, FINALE_Y, a[0], taille, 1));
+        const B = encre(() => dessinerChiffreFinale(s % 10, LARGEUR / 2 + FINALE_ECART - 2, FINALE_Y, a[1], taille, 1));
+        if (Math.min(A.h, B.h) < 88 || Math.max(A.b, B.b) > 235) hors.push([s, Math.round(Math.min(A.h, B.h)), Math.round(Math.max(A.b, B.b))]);
+        if (B.g - A.d < 0) collisions++;
+      }
+      verifier('… aucun chiffre ne recouvre le titre (donc le « Ê ») ni le mot « SECONDES »', hors.length === 0, hors.slice(0, 6));
+      verifier('… et les deux chiffres ne se marchent pas dessus', collisions === 0, collisions);
+
+      // Toute la derniere minute, image par image, sans un incident.
+      const incidentsAvant = incidents.nombre;
+      compte.apercu = { fin: 0 };
+      let lettrePresente = true;
+      for (let r = 61.2; r > 0.05; r -= 0.25) {
+        compte.apercu.fin = performance.now() + r * 1000; avancer(1 / 60);
+        if (!zoneE()) lettrePresente = false;
+      }
+      compte.apercu = null; avancer(1 / 60);
+      verifier('… elle se dessine d\'un bout à l\'autre sans incident, et la lettre reste là',
+               incidents.nombre === incidentsAvant && lettrePresente && ferme(), [incidents.nombre - incidentsAvant, lettrePresente]);
+    });
+
+    /* ======================================================================= */
+    await section('Z. LE COMPTE À REBOURS : L\'HEURE, ET LE VRAI ZÉRO', async () => {
+      poserOuverture(47 * JOUR); reverrouiller();
+      const synchroFinie = async () => { await attendre(60); for (let i = 0; i < 80 && synchroEnCours; i++) await attendre(100); };
+      /* SANS SERVEUR — le jeu ouvert par double-clic sur index.html. La page ne
+         peut alors demander l'heure a personne ; c'est la meme branche que si
+         `fetch` n'existait pas, et c'est ainsi qu'on l'emprunte ici. */
+      await synchroFinie();
+      const vraiFetch = window.fetch;
+      window.fetch = undefined;
+      try { synchroniserCompte(); } finally { window.fetch = vraiFetch; }
+      avancer(0.1);
+      verifier('sans serveur, le compte suit l\'horloge de l\'appareil — et tient tout autant',
+               compte.source === 'appareil' && ferme() && resteCompte() > 46 * 86400, [compte.source, Math.round(resteCompte())]);
+      if (/^https?:$/.test(location.protocol)) {
+        synchroniserCompte(); await synchroFinie();
+        verifier('l\'heure est demandée au serveur qui héberge la page', compte.source === 'serveur', compte.source);
+        const reste0 = resteCompte();
+        Date.now = () => dateVraie.call(Date) + 400 * JOUR;
+        try {
+          avancer(1);
+          const tient = ferme() && Math.abs(resteCompte() - reste0) < 5;
+          surveillerHorlogeCompte(); await synchroFinie(); avancer(0.5);
+          verifier('avancer l\'horloge de l\'appareil de plus d\'un an n\'ouvre rien',
+                   tient && ferme() && compte.source === 'serveur' && Math.abs(resteCompte() - reste0) < 10,
+                   [tient, compte.source, Math.round(resteCompte() - reste0)]);
+        } finally { Date.now = dateVraie; }
+        synchroniserCompte(); await synchroFinie();
+      } else ecrire('  (page ouverte par double-clic : pas de serveur à qui demander l\'heure)');
+
+      // Une page ouverte A TORT — horloge de l'appareil en avance au
+      // chargement, « Jouer » deja clique — se referme quand le serveur repond.
+      ouvrirLeJeuCompte(false); demarrage.lance = true; scene = 'logos';
+      appliquerHeureCompte(); avancer(0.2);
+      verifier('une page ouverte à tort par une horloge en avance se referme dès que l\'heure arrive', ferme(), scene);
+
+      // LE VRAI ZERO : pas un apercu, l'heure elle-meme.
+      poserOuverture(40);
+      await attendre(90); avancer(0.3);
+      const effet = compte.ouverture > 0 && compte.actif && scene === 'compte' && !zoneE();
+      lancerDemarrage();
+      const tenu = !demarrage.lance;
+      avancer(COMPTE.dureeOuverture + 0.3);
+      verifier('au vrai zéro : l\'effet d\'ouverture, pendant lequel le jeu est encore fermé', effet && tenu, [effet, tenu]);
+      verifier('… puis l\'écran d\'accueil s\'ouvre tout seul', scene === 'accueil' && !compte.actif && !compte.ouvertParCode, scene);
+      avancer(1);
+      verifier('… et le compte à rebours ne revient pas', scene === 'accueil' && !compte.actif, scene);
+      verifier('… l\'onglet reprend le nom du jeu', document.title === compte.titreOnglet, document.title);
+    });
+  }
+
+  /* On entre dans le jeu pour la suite. Avant l'heure, c'est par l'interieur —
+     exactement ce que le README dit qu'un outil de developpement peut faire. */
+  if (aLeCompte) {
+    COMPTE.ouverture = ouvertureVraie;
+    Date.now = dateVraie;
+    if (BETA) {
+      if (compte.actif) ouvrirLeJeuCompte(true);
+      compte.ouvertParCode = true;       // qu'une synchro ne referme pas au milieu de la suite
+      scene = 'accueil';
+    }
+  }
+
   /* --- Mise en route : on passe l'accueil et les logos --------------------- */
   if (scene === 'accueil') lancerDemarrage();
   for (let i = 0; i < 300 && demarrage.finChargement < 0; i++) await attendre(100);
@@ -144,7 +601,7 @@
   /* ========================================================================= */
   await section('A. CHARGEMENT', async () => {
     verifier('le jeu est arrivé au menu', scene === 'menu', scene);
-    verifier('version 0.27' + (BETA ? ' bêta' : ''), versionLisible() === '0.27' + (BETA ? ' bêta' : ''), versionLisible());
+    verifier('version 0.28' + (BETA ? ' bêta' : ''), versionLisible() === '0.28' + (BETA ? ' bêta' : ''), versionLisible());
     verifier('les onze planches de Brad sont chargées',
              Object.keys(PLANCHES_UNIFORMES).every(c => planchesBrad[c]), Object.keys(planchesBrad).length);
     verifier('aucune erreur de script au chargement', erreurs.length === 0, erreurs);
@@ -882,6 +1339,12 @@
   R.volMusique = volumes.m; R.volEffets = volumes.e;
   appliquerUniforme(partie.uniforme);
   retourAuMenu();
+  /* Avant l'heure, la page retourne ou elle etait : au compte a rebours. La
+     suite etait entree par l'interieur ; elle ne laisse pas la porte ouverte. */
+  if (aLeCompte && BETA) {
+    compte.ouvertParCode = false;
+    if (heureCompte() < COMPTE.ouverture) verrouillerCompte();
+  }
   dernier = performance.now(); accumulateur = 0;
   let rendue = true;
   for (const c of CLES) { try { if (localStorage.getItem(c) !== coffre[c]) rendue = false; } catch (e) { /* idem */ } }

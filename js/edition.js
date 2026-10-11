@@ -27,6 +27,17 @@ const BETA = true;
 const DATES_BETA = 'du 27 au 29 novembre 2026';
 const DATE_SORTIE = '9 janvier 2027';
 
+/* L'INSTANT OU LA BETA S'OUVRE : le 27 novembre 2026 a 20 h, heure de Paris.
+
+   Un INSTANT, pas une heure locale : un joueur de Montreal ne doit pas attendre
+   20 h chez lui. Fin novembre Paris est a l'heure d'hiver, UTC+1 — 20 h a Paris
+   font donc 19 h UTC. (Les mois de Date.UTC partent de zero : 10, c'est
+   novembre.)
+
+   Avant cet instant, le jeu ne montre que le compte a rebours (js/compte.js).
+   Pour le deplacer, c'est cette ligne, et `dateLisible` dans js/compte.js. */
+const OUVERTURE_BETA = Date.UTC(2026, 10, 27, 19, 0, 0);
+
 /* Ce que la beta ouvre. Tout le reste existe dans le code — la bande-annonce
    en a besoin, et la version finale aussi — mais ne se joue pas. */
 const NIVEAUX_BETA = ['intro', 'niveau1', 'niveau2', 'niveau3'];

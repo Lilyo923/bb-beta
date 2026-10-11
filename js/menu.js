@@ -30,6 +30,9 @@ const demarrage = {
 };
 
 function lancerDemarrage() {
+  // Ceinture et bretelles : tant que le compte a rebours tient le jeu ferme,
+  // rien ne le demarre — quel que soit le chemin par lequel on arrive ici.
+  if (typeof compteVerrouille === 'function' && compteVerrouille()) return;
   if (demarrage.lance) return;
   // En portrait sur mobile, l'ecran de rotation recouvre tout : demarrer
   // maintenant lancerait la partie derriere un voile.
@@ -684,6 +687,7 @@ function dessinerAccueil() {
 
   texteCentre('Clique pour activer le son et charger le jeu',
               y + 68, '11px system-ui, sans-serif', 'rgba(255,255,255,.42)');
+  dessinerRappelAccesCompte();     // « accès anticipé », pour qui est entré avec un code
 
   // Le bandeau juridique, une seule fois dans la vie du navigateur.
   dessinerBandeauMentions();
@@ -1313,6 +1317,13 @@ function activerZone(z) {
   if (!z) return;
   switch (z.action) {
     case 'demarrer':    lancerDemarrage(); break;
+    // --- compte a rebours : la lettre, puis le champ de code
+    case 'compte-e':       audio.debloquer(); ouvrirSaisieCompte(); break;
+    case 'compte-touche':  tapeCodeCompte(z.valeur); break;
+    case 'compte-effacer': effaceCodeCompte(); break;
+    case 'compte-valider': validerCodeCompte(); break;
+    case 'compte-fermer':  fermerSaisieCompte(); break;
+    case 'compte-fond':    break;
     /* Le bandeau juridique. Lire le texte ne le fait PAS disparaitre : sinon
        celui qui clique par curiosite, lit, et revient par Echap n'a plus aucun
        moyen d'y retourner depuis l'accueil. Seul « Jouer » vaut acceptation —

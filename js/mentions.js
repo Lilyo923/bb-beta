@@ -25,7 +25,7 @@
    ========================================================================== */
 'use strict';
 
-const VERSION_JEU = '0.27';
+const VERSION_JEU = '0.28';
 const DATE_VERSION = 'octobre 2026';
 const CONTACT_MAIL = 'imaginestudio.hwr@gmail.com';
 

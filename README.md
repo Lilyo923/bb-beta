@@ -4080,3 +4080,256 @@ parties existantes.
 
 Version du jeu : **0.27 bêta**.
 
+
+# Prototype 28 — le compte à rebours avant la bêta
+
+La demande : tant que la bêta n'est pas ouverte, le site ne montre qu'un compte
+à rebours, dans le style du jeu, jusqu'au **27 novembre 2026 à 20 h**. Deux
+codes, saisis après un clic sur le « Ê » de « COMPTE À REBOURS AVANT LA
+BÊTA » : l'un laisse jouer avant l'heure, l'autre montre ce qui se passe à la
+fin du compte. Sous la minute, les chiffres changent de police et d'angle à
+chaque seconde. Et : *vérifier qu'il n'est pas possible de jouer*.
+
+Tout est dans un fichier neuf, `js/compte.js`, et tient à un seul réglage :
+`OUVERTURE_BETA`, dans `js/edition.js`. La version finale (`BETA = false`) n'a
+pas de compte à rebours du tout.
+
+**Les deux codes ne sont écrits nulle part dans ce dossier** — ni dans le jeu,
+ni ici. Voir le point 2.
+
+## 1. Ce qu'on voit
+
+- **Avant l'heure** : le titre, quatre plaques — jours, heures, minutes,
+  secondes — en chiffres de blocs dessinés rectangle par rectangle comme les
+  cases de vie, la date, et le BRADDY3000 qui commente l'attente. Derrière,
+  le fond du menu : Brad joue tout seul, les Serra entrent par les côtés.
+  L'onglet compte aussi (« J-47 », puis « 5 h 03 », puis « 02:05 »).
+- **La dernière minute** : plus que les secondes, en deux chiffres géants.
+  Chaque chiffre a sa police, son angle (de 4 à 24 degrés, d'un côté ou de
+  l'autre), sa taille et sa couleur, retirés à chaque seconde. Douze allures :
+  onze polices du système et les blocs du compteur. Le tirage part du numéro de
+  la seconde, pas du hasard — tout le monde voit le même « 37 ». Un tic par
+  seconde ; sur les dix dernières, un halo rouge, un tremblement, un son plus
+  grave.
+- **À zéro** : un éclair, des confettis, la fanfare, « LA BÊTA EST OUVERTE »,
+  puis l'écran d'accueil. Sans rien redéployer.
+
+Deux défauts que j'ai trouvés en regardant mes propres captures, et corrigés :
+
+- **Un chiffre géant recouvrait le titre** — donc le « Ê ». Un « 6 » en Impact
+  penché de vingt degrés ne tient pas dans la place d'un « 1 » en Courier, et
+  les polices ne sont pas les mêmes d'une machine à l'autre. Chaque chiffre a
+  maintenant un cadre : le jeu **mesure son encre** (pas la boîte de la police,
+  qui compte du vide), calcule ce qu'elle occupe une fois tournée, et réduit
+  s'il le faut. Mesuré sur les 61 secondes : l'encre reste entre les lignes 91
+  et 225, le titre finit à 86 et « SECONDES » commence à 237.
+- **« Jamais la même police deux secondes de suite » était faux** : 2 secondes
+  sur 60 la gardaient. Je comparais chaque tirage à un tirage *libre* de la
+  seconde précédente, pas à celui qu'elle avait vraiment reçu. La table des 61
+  secondes se construit maintenant d'un coup, de 60 vers 0. Mesuré : 0 répétition
+  d'une seconde à l'autre, 0 côte à côte, pour la police comme pour la couleur.
+
+Sur ce Mac, les onze polices donnent dix dessins réellement différents. Sur
+Windows ou Android ce ne seront pas les mêmes : chaque entrée se termine par
+une famille générique (serif, cursive, monospace…), pour que le chiffre change
+d'allure même là où la première police manque.
+
+## 2. Les deux codes
+
+**Le « Ê »** est la seule chose qui se touche sur l'écran. Le curseur ne
+devient pas une main en passant dessus : une main au-dessus d'une lettre, c'est
+une porte qui s'annonce. Le clic ouvre un panneau « UN CODE ? » avec un clavier
+dessiné (sur téléphone il n'y en a pas d'autre) ; au clavier, on tape, Entrée
+valide, Échap referme. Douze caractères au plus ; majuscules, minuscules,
+espaces et tirets ne comptent pas.
+
+- **Le code d'accès** : « Accès accordé. », puis l'écran d'accueil, qui porte
+  la mention « Accès anticipé · ouverture publique le 27 novembre 2026 à
+  20 h » — sinon on ne sait plus si le compte est fini ou si l'on est passé à
+  côté.
+- **Le code d'aperçu** : le compteur saute à 1 min 30, joue la dernière minute
+  et l'ouverture, puis **revient au vrai compte à rebours**. Échap l'interrompt.
+
+**Où sont les codes.** Dans `js/compte.js` il n'y a que leur *empreinte*
+(SHA-256, salée) : on peut vérifier qu'un code est le bon sans pouvoir le lire
+dans le fichier. C'est nécessaire, parce que **tout ce dossier est publié** :
+un code écrit en clair dans le jeu, dans ce README ou dans une suite de tests
+se lirait à l'adresse du site.
+
+```
+python3 tools/empreinte_code.py MonNouveauCode    la ligne à coller dans COMPTE.codes
+python3 tools/empreinte_code.py --verifier        avant de publier : aucun code en clair ?
+```
+
+`--verifier` ne connaît pas les codes non plus. Il prend chaque mot de chaque
+fichier (et chaque paire de mots voisins), en calcule l'empreinte et regarde si
+elle est dans la table : 55 fichiers, quelque 91 000 essais, rien. Je l'ai essayé sur
+un dossier à part où j'avais écrit un code exprès, dans un fichier et dans un
+nom de fichier : il trouve les deux.
+
+## 3. « Vérifier qu'il n'est pas possible de jouer »
+
+**Ce qui tient.** L'écran n'a aucune commande : la fonction qui reçoit le
+clavier ne contient aucun chemin vers le jeu, et « Jouer » refuse de démarrer
+tant que le compte tient, quel que soit le chemin par lequel on y arrive.
+Essayé, dans le navigateur :
+
+- 77 touches (lettres, chiffres, F1 à F12, Entrée, Espace, Échap, flèches…),
+  chacune appuyée, tenue, relâchée ;
+- 6 408 clics, un tous les six pixels sur tout l'écran hors de la lettre ;
+- les boutons tactiles, la molette, le double-clic, la perte de focus ;
+- « Jouer » appelé directement, et l'écran d'accueil affiché de force ;
+- 4 000 gestes au hasard, champ de code compris ;
+- avant l'heure, **rien du jeu n'est téléchargé** : aucune musique, quatre
+  images (Brad et trois Serra, pour le décor).
+
+**L'horloge de l'ordinateur ne suffit pas à tricher.** Avancer sa date est la
+première chose qu'on essaie. La page demande donc l'heure au serveur qui
+l'héberge — l'en-tête `Date` de sa propre réponse, aucun service extérieur —
+puis compte avec une horloge que le réglage de l'appareil ne déplace pas. Elle
+la redemande toutes les cinq minutes, quand l'onglet revient devant, et dès
+qu'elle voit l'horloge de l'appareil sauter. Une page que l'horloge locale
+aurait ouverte à tort se referme quand le serveur répond. Essayé : horloge
+avancée de 400 jours, rien ne s'ouvre. Autre bénéfice : tout le monde voit le
+zéro au même instant, à une seconde près. En bas à gauche, l'écran dit quelle
+heure il suit (« heure du serveur » ou « heure de cet appareil »).
+
+L'en-tête `Date` n'est fiable que si l'hébergeur y met l'heure du moment, même
+quand la page sort de son cache. **Mesuré le 11 octobre 2026 sur deux sites
+hébergés par Netlify** : une page en cache depuis 17 heures (`age: 61840`)
+porte bien l'heure de la requête. Je ne connais pas l'adresse de ton site : à
+refaire dessus une fois, la date doit être celle de l'instant.
+
+```
+curl -sI https://ton-site/ | grep -i '^date\|^age'
+```
+
+**Ce qui ne tient pas, et ne peut pas tenir.** *Le jeu est déjà dans la page.*
+Ses fichiers sont en ligne en même temps que le compte à rebours. Donc :
+
+- quelqu'un qui ouvre les outils de développement du navigateur et écrit une
+  ligne entre dans le jeu — la suite de vérification fait exactement cela pour
+  tester le reste ;
+- sans même entrer, les fichiers se lisent : niveaux, dialogues, images ;
+- si la demande d'heure échoue (hors ligne, requête bloquée), la page croit
+  l'horloge de l'appareil — c'est voulu, pour qu'une panne de réseau ne ferme
+  pas le jeu à tout le monde le jour J ; ouvert par double-clic, sans serveur,
+  il ne reste que cette horloge.
+
+Aucun verrou posé dans une page ne peut empêcher cela. Celui-ci arrête le
+clavier, la souris, le doigt et la date de l'ordinateur — c'est-à-dire tout le
+monde sauf quelqu'un qui sait ce qu'il fait et veut vraiment. **Si la bêta doit
+rester réellement invisible jusqu'à 20 h, il ne faut pas la mettre en ligne
+avant** : publier le compte à rebours seul, et pousser le jeu à l'heure. Ce
+n'est pas ce que tu as demandé (un code qui laisse jouer avant suppose que le
+jeu soit là), donc je ne l'ai pas fait ; dis-le si tu le veux.
+
+## 4. Le jour J, et pour essayer avant
+
+`OUVERTURE_BETA = Date.UTC(2026, 10, 27, 19, 0, 0)` : 19 h en temps universel,
+soit 20 h à Paris, qui est à l'heure d'hiver fin novembre. La date est écrite
+une seconde fois, en lettres, pour l'écran (`COMPTE.dateLisible`) ; la suite de
+vérification contrôle que les deux disent la même chose.
+
+Ceux qui ont la page ouverte voient le zéro et l'effet ; ceux qui arrivent
+après tombent directement sur l'écran d'accueil.
+
+Pour voir le vrai zéro sans attendre le 27 novembre, le serveur local peut se
+croire à une autre date :
+
+```
+python3 tools/serveur.py --heure 2026-11-27T18:59:15Z
+```
+
+Essayé ainsi, sans toucher à rien : dernière minute à 35 secondes, effet
+d'ouverture (pendant lequel « Jouer » refuse encore), écran d'accueil. Et avec
+`--heure 2026-11-28T10:00:00Z` : la page s'ouvre.
+
+## 5. Ce que j'ai décidé seul — à confirmer ou à changer
+
+- **Le code d'aperçu n'ouvre pas le jeu.** Tu as demandé qu'il « fasse
+  l'effet » de la fin du compte. S'il ouvrait le jeu au bout, ce serait une
+  seconde clef, avec quatre-vingt-dix secondes d'attente.
+- **Le code d'accès se retape à chaque visite.** Rien n'est retenu dans le
+  navigateur : pas de clef nouvelle, donc rien à ajouter aux conditions
+  d'utilisation, et un code vu une fois sur l'écran d'un ami ne reste pas
+  valable chez lui. Si tes testeurs s'en plaignent, c'est quatre lignes.
+- **Trois erreurs de suite, et le champ se tait huit secondes.** Ça n'arrête
+  personne de décidé ; ça décourage de marteler au hasard.
+- **Les textes sont de moi** : les répliques du BRADDY3000 (« Je compte les
+  secondes. Toutes. Je n'ai que ça à faire. »…), « UN CODE ? Tu as trouvé la
+  lettre. Il te manque le mot. », « LA BÊTA EST OUVERTE ». Ils sont dans
+  `js/compte.js`, section 7.
+
+## Ce que je n'ai pas fait, et qu'il faut savoir
+
+- **Rien n'a été essayé dans Safari ni sur un téléphone.** Les polices de la
+  dernière minute n'y seront pas toutes les mêmes ; le cadre des chiffres est
+  mesuré, pas supposé, donc il tient quelle que soit la police.
+- **L'en-tête `Date` de ton site** n'a pas été mesuré — seulement celui
+  d'autres sites du même hébergeur (point 3).
+- **`tools/socle.mjs`** (les anciennes suites Node) passe maintenant le compte
+  à rebours par l'intérieur avant de cliquer « Jouer ». Changé, pas exécuté :
+  toujours pas de Node ici.
+- **Toujours en attente de ta réponse** depuis le prototype 26 : reculer ou non
+  le premier ennemi derrière les changements de décor des niveaux 2 à 10 ; le
+  nom et le rythme du bonus de régénération ; « cinq niveaux joués » ou
+  « terminés » pour la cravate verte.
+- **Toujours à confirmer par toi dans Safari**, depuis le prototype 27 : Échap
+  ne fait plus quitter le plein écran ; Brad ne part plus seul vers la gauche.
+
+## Vérification
+
+```
+python3 tools/serveur.py                     édition bêta     240 vérifications
+python3 tools/serveur.py --edition finale    édition finale   193 vérifications
+```
+
+```js
+var s = document.createElement('script'); s.src = 'tools/verif-navigateur.js'; document.head.appendChild(s);
+```
+
+**0 échec sur trois exécutions consécutives de chacune.** Inutile d'avoir un
+code : la suite passe le compte à rebours par l'intérieur, et le remet en
+sortant. Les sections A à V sont celles du prototype 27, inchangées. Les
+nouvelles passent en premier — ce qu'elles vérifient d'abord, c'est qu'avant
+l'heure rien n'a démarré :
+
+```
+                                                        bêta   finale
+W. LE COMPTE À REBOURS : LE VERROU ...................    16
+X. LES CODES .........................................    31
+Y. LE COMPTEUR ET LA DERNIÈRE MINUTE .................    13
+Z. L'HEURE, ET LE VRAI ZÉRO ..........................     8
+   pas de compte à rebours dans la version finale ....             2
+```
+
+Elles ne dépendent pas de la date du jour : elles posent leur propre heure
+d'ouverture et remettent la vraie en sortant. Elles tourneront encore après le
+27 novembre. Les codes qu'elles saisissent sont deux codes d'essai inventés,
+dont l'empreinte n'est dans la table que le temps de la section X.
+
+**Elle sait échouer.** J'ai saboté quatre protections dans la page, puis
+relancé : la garde de « Jouer » retirée, une touche qui ouvre le champ, la même
+police sur les deux chiffres, la main rendue au-dessus de la lettre. **30
+échecs**, et chacun des quatre sabotages nommé. Contre le prototype 27, elle
+s'arrête sur deux : le module est absent, la version n'est pas la bonne.
+
+**Ce qu'elle ne remplace pas.** Elle prouve qu'aucun *geste* n'ouvre le jeu.
+Elle ne prouve pas — et rien ne le peut — qu'il est à l'abri de quelqu'un qui
+écrit du code dans la page : voir le point 3.
+
+## Pour déployer
+
+`brad-bitt-code-28-beta.zip` par-dessus le dépôt. Un fichier nouveau dans le
+jeu, `js/compte.js`, que `index.html` charge ; un outil nouveau,
+`tools/empreinte_code.py`. L'archive contient toujours
+`assets/audio/menu-principal.m4a`, au cas où il manquerait.
+
+**Dès que c'est en ligne, et jusqu'au 27 novembre à 20 h, le site n'affiche
+plus que le compte à rebours — pour toi aussi.** Le code d'accès est ta porte.
+
+Aucune clef nouvelle dans le navigateur ; les parties de la 0.25 à la 0.27 se
+relisent telles quelles.
+
+Version du jeu : **0.28 bêta**.

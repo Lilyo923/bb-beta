@@ -9,6 +9,15 @@ verifier sans rien installer.
     python3 tools/serveur.py                    le jeu tel qu'il est sur le disque
     python3 tools/serveur.py --edition finale   le meme jeu, BETA a false
     python3 tools/serveur.py --port 8200
+    python3 tools/serveur.py --heure 2026-11-27T18:58:00Z
+                                                le serveur se croit a cet instant
+
+L'option --heure sert au COMPTE A REBOURS : la page lit l'heure dans l'en-tete
+`Date` du serveur, pas sur l'horloge de l'appareil. Faire mentir le serveur est
+donc la seule façon de voir le vrai passage a zero sans attendre le jour dit —
+et sans toucher a l'horloge du Mac. L'instant est en temps universel (le Z) :
+20 h a Paris fin novembre, c'est 19:00:00Z. A partir de la, l'heure avance
+normalement.
 
 Trois choses qu'un `python3 -m http.server` ne fait pas :
 
@@ -20,9 +29,12 @@ Trois choses qu'un `python3 -m http.server` ne fait pas :
    qu'on ne sait pas lui servir par morceaux.
 """
 import argparse
+import datetime
+import email.utils
 import os
 import re
 import sys
+import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 TYPES = {
@@ -33,7 +45,7 @@ TYPES = {
 }
 
 
-def fabrique(racine, edition):
+def fabrique(racine, edition, decalage=0.0):
     class Gestionnaire(SimpleHTTPRequestHandler):
         # Connexions gardees ouvertes : le jeu charge une quarantaine de
         # fichiers d'un coup, et en HTTP/1.0 chacun rouvrait une connexion.
@@ -41,6 +53,13 @@ def fabrique(racine, edition):
 
         def __init__(self, *a, **k):
             super().__init__(*a, directory=racine, **k)
+
+        # L'en-tete `Date` de chaque reponse : l'heure vraie, plus le decalage
+        # demande par --heure.
+        def date_time_string(self, timestamp=None):
+            if timestamp is None:
+                timestamp = time.time() + decalage
+            return email.utils.formatdate(timestamp, usegmt=True)
 
         def log_message(self, fmt, *args):
             # Seules les erreurs meritent une ligne : 404, 500.
@@ -128,17 +147,27 @@ def main():
     p.add_argument('--edition', choices=['beta', 'finale'], default=None,
                    help="force l'edition servie, sans modifier js/edition.js")
     p.add_argument('--racine', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+    p.add_argument('--heure', default=None, metavar='AAAA-MM-JJTHH:MM:SSZ',
+                   help="l'instant (temps universel) auquel le serveur se croit au demarrage")
     a = p.parse_args()
     racine = os.path.abspath(a.racine)
+    decalage = 0.0
+    if a.heure:
+        try:
+            voulu = datetime.datetime.strptime(a.heure, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
+        except ValueError:
+            p.error("--heure s'ecrit comme 2026-11-27T18:58:00Z (temps universel)")
+        decalage = voulu.timestamp() - time.time()
     # La file d'attente par defaut (5) est plus courte que la rafale d'un
     # chargement de page : le navigateur voyait des connexions refusees, et des
     # scripts manquaient a l'appel — une panne du serveur qui ressemblait a une
     # panne du jeu.
     ThreadingHTTPServer.request_queue_size = 128
     ThreadingHTTPServer.daemon_threads = True
-    serveur = ThreadingHTTPServer(('127.0.0.1', a.port), fabrique(racine, a.edition))
-    print('Brad Bitt servi sur http://localhost:%d/  (%s%s)' % (
-        a.port, racine, ', edition ' + a.edition if a.edition else ''))
+    serveur = ThreadingHTTPServer(('127.0.0.1', a.port), fabrique(racine, a.edition, decalage))
+    print('Brad Bitt servi sur http://localhost:%d/  (%s%s%s)' % (
+        a.port, racine, ', edition ' + a.edition if a.edition else '',
+        ', le serveur se croit le ' + a.heure if a.heure else ''))
     sys.stdout.flush()
     try:
         serveur.serve_forever()
