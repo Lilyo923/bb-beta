@@ -613,7 +613,7 @@ const debordements = await page.evaluate(() => {
   }
   reinitialiserHub();
   partie.codesUniformes = ['FNAM3RL'];
-  indexVestiaire = UNIFORMES.findIndex(u => u.cle === '3irl');
+  indexVestiaire = ordreVestiaire().findIndex(u => u.cle === '3irl');
 
   scene = 'options'; indexOptions = 2; rendu();
   const options = pixelsSous(334);

@@ -613,8 +613,9 @@ function dessinerDialogue() {
      coin, par-dessus le canvas : un clic y atterrissait sur lui et jamais sur
      « Passer ». C'est la vraie cause du bouton qui ne repondait pas. */
   /* Le bouton dit sa touche. « Passer » ne repondait au clavier qu'a Echap,
-     sans que rien ne l'ecrive — et Echap, en plein ecran, ne parvient pas au
-     jeu. C'est P, et c'est marque dessus. Au doigt, pas de touche a annoncer. */
+     sans que rien ne l'ecrive — et Echap, dans Safari, quittait aussi le plein
+     ecran (corrige au prototype 27, voir js/entrees.js). P fait la meme
+     chose, et c'est marque dessus. Au doigt, pas de touche a annoncer. */
   const libellePasser = estTactile ? 'Passer  ▸▸' : 'Passer  ▸▸  P';
   const pw = estTactile ? 78 : 92, ph = 22;
   const px = bx + bw - pw - 2, py = by - 32;

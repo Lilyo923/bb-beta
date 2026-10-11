@@ -1,8 +1,9 @@
-UNE SEULE MUSIQUE EST NOUVELLE DANS LE PROTOTYPE 26 :
+UNE SEULE MUSIQUE EST NOUVELLE DEPUIS LE PROTOTYPE 25 :
 
     menu-principal.m4a      la musique du menu principal (3 min 53)
 
-Elle est dans l'archive brad-bitt-code-26-beta.zip, a cet emplacement. Depose-la
+Elle est arrivee au prototype 26 ; l'archive brad-bitt-code-27-beta.zip la
+contient aussi, a cet emplacement, au cas ou la 26 n'aurait pas ete deposee. Depose-la
 sur ton depot avec les autres, dans assets/audio/. Sans elle, le menu reste
 silencieux et affiche « 1 piste audio introuvable (ex. menu-principal.m4a) ».
 
@@ -23,11 +24,17 @@ LES AUTRES MUSIQUES N'ONT PAS CHANGE depuis le prototype 23 : si elles sont
 deja sur ton depot, il n'y a rien a faire. L'archive ne les contient pas, donc
 elle ne peut rien ecraser.
 
-Le DOSSIER brad-bitt-code-26-beta, lui, les contient toutes, sous les noms que
+Le DOSSIER brad-bitt-code-27-beta, lui, les contient toutes, sous les noms que
 le jeu attend (intro, niveau1 … niveau10, boss3, boss6, boss9, menu, menu-…) :
 il est jouable tel quel, pour tester en local. Ce sont tes fichiers d'origine,
 recopies depuis « Jeu/assets/audio » et « mais les musiques » ; niveau10 y est
 en .mp3, tel que tu l'as fourni — le jeu se rabat dessus tout seul.
+
+ATTENTION, DEPUIS QUE LE DOSSIER EST COMPLET : les themes de boss (boss3,
+boss6, boss9) coupaient la musique de la bande-annonce des qu'ils etaient
+presents dans assets/audio. C'est corrige au prototype 27 — mais si ton depot
+en ligne a les musiques et un code anterieur au 27, la bande-annonce y perd sa
+musique a la 31e seconde.
 
 Trois musiques n'ont jamais ete fournies et le jeu les attend toujours :
 mini-kirby.m4a, mega-kirby.m4a, generique.m4a. Sans elles, les mini-boss, le

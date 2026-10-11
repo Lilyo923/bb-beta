@@ -19,7 +19,7 @@ Déployable tel quel sur Netlify (racine du dépôt, pas de commande de build).
 | Frapper / lancer la boule | X · J |
 | Onde de choc (Brad-Shy plein) | C · K |
 | Menus | ↑ ↓ pour choisir, ← → pour régler, Entrée — « Sortir » est le dernier choix de chaque liste |
-| Pause · quitter la base · passer un dialogue | P · Échap |
+| Pause · quitter la base (avec confirmation) · passer un dialogue | P · Échap |
 | Retour au début du niveau | R |
 | Panneau de développement | F1 |
 
@@ -3511,6 +3511,12 @@ pour lui : la première pression quitte le plein écran, et le jeu ne l'entend
 même pas. Or Échap était la **seule** façon de dire « non » ou « retour » au
 clavier, à peu près partout.
 
+> **Erratum, prototype 27.** La première phrase est fausse pour le plein écran
+> de la *fenêtre* — celui de Safari. La touche arrive bien jusqu'au jeu ; c'est
+> le jeu qui n'annulait pas son action par défaut, et Safari quittait donc le
+> plein écran *en plus*. Corrigé à la racine au prototype 27. Les boutons au
+> clavier décrits ci-dessous restent utiles pour eux-mêmes.
+
 Trois réponses, parce qu'il y avait trois situations.
 
 **La confirmation d'achat se choisit aux flèches.** Avant : Entrée valait
@@ -3842,4 +3848,235 @@ Aucune clef nouvelle dans le navigateur : les conditions d'utilisation n'ont
 pas à changer. Une partie de la 0.25 se relit telle quelle.
 
 Version du jeu : **0.26 bêta**.
+
+---
+
+# Prototype 27 — sept retours sur la 0.26
+
+Ta liste, dans l'ordre. Deux de ces défauts étaient de mon fait : la
+bande-annonce s'est cassée parce que j'avais complété le dossier des musiques
+sans la relancer jusqu'au bout, et ce que j'avais écrit d'Échap en plein écran
+était faux.
+
+## 1. La bande-annonce perdait sa musique
+
+**Reproduit avant d'y toucher.** À 30,9 secondes — le premier plan de boss — la
+musique du boss 3 est demandée ; une demi-seconde plus tard, le temps que le
+fichier arrive, le morceau de la bande-annonce est mis en pause et remplacé.
+Puis le boss 6, puis le boss 9. Le montage, qui se cale sur sa piste, finissait
+en roue libre.
+
+**La cause.** Les plans de la bande-annonce font *tourner le moteur* : Brad
+entre dans une vraie arène, et une vraie arène lance la musique de son boss.
+Rien ne l'en empêchait.
+
+**Pourquoi maintenant.** Le défaut dort depuis le prototype 18. Il ne
+s'entendait pas tant que `boss3.m4a`, `boss6.m4a` et `boss9.m4a` n'étaient pas
+dans `assets/audio` : une piste introuvable ne remplace rien. Au prototype 26
+j'ai réuni toutes les musiques dans le dossier pour qu'il soit jouable tel quel
+— et je n'ai pas regardé la bande-annonce au-delà de ses sept premières
+secondes. **Si ton dépôt en ligne a les musiques, la bande-annonce y est
+cassée aussi**, avec n'importe quel code antérieur à celui-ci.
+
+**La correction : une piste réservée ne se fait pas couper.** La bande-annonce
+réserve sa piste en démarrant et la libère en sortant. Entre les deux, le reste
+du jeu peut demander ce qu'il veut — une arène, une porte, une mort, la base :
+seule la piste réservée joue, et personne ne l'arrête. Un verrou à **un**
+endroit (`js/audio.js`), plutôt qu'un « sauf pendant la bande-annonce » à
+chaque endroit où le moteur touche à la musique : le prochain qui en ajoutera
+un n'aura pas à y penser.
+
+Vérifié à travers les trois plans de boss, fichiers arrivés : la piste ne
+bouge pas. Et hors bande-annonce, un vrai combat lance toujours la musique de
+son boss.
+
+## 2. P ne renvoie plus au menu sans demander
+
+P, Échap et le clic sur « Menu principal » posent tous les trois la même
+question, avec la boîte habituelle : ← → pour choisir, Entrée pour valider.
+P la referme aussi — la même touche doit pouvoir défaire ce qu'elle vient de
+faire. Brad s'arrête pendant la question.
+
+Rien n'était perdu en quittant la base (la partie est sauvegardée), mais on se
+retrouvait ailleurs sans l'avoir voulu, à une touche de « Nouvelle partie ».
+
+## 3. Échap ne fait plus quitter le plein écran
+
+**Faisable, et c'était une ligne.** Dans Safari, Échap quitte le plein écran de
+la fenêtre *sauf si la page annule l'action par défaut de la touche*. Le jeu ne
+l'annulait pas : chaque Échap ouvrait la pause **et** réduisait la fenêtre.
+Il l'annule maintenant, dans tous les écrans (quatorze essayés). Les autres
+touches gardent leur comportement — F5, F11, Tab ne sont pas touchées.
+
+**Je ne l'ai pas essayé dans Safari.** Je ne peux pas le piloter depuis ici.
+Ce que j'ai : le comportement documenté — un script d'utilisateur qui fait
+exactement ça, rapporté comme fonctionnel sur Safari 15.4 — et la vérification
+que le jeu annule bien l'action. Ce qui manque : le voir sur ta machine.
+**Dis-moi ce que ça donne.**
+
+Le bouton vert, ⌃⌘F et le menu Présentation sortent toujours du plein écran.
+
+## 4. Le vestiaire rangé, et le champ de code dégagé
+
+**Le champ passait sous « Sortir ».** Il faisait 152 px de large à partir de
+432 et finissait donc à 584 ; le bouton commence à 544. Quarante pixels l'un
+sur l'autre, depuis l'origine — je l'avais vu au prototype 26 et laissé. Il
+finit maintenant à 536, huit pixels avant le bouton.
+
+Son message (« Code inconnu », « Code reconnu »…) s'écrivait **dix pixels sous
+le bord du panneau**, sur le décor de la base. Il s'affiche dans la bande de
+description, comme au jukebox.
+
+**Deux groupes au lieu d'un mélange.** Pendant la bêta, quatre uniformes se
+gagnent et sept attendent la sortie. Rangés dans l'ordre de la liste, ils
+étaient entremêlés : la cravate turquoise, gagnable, se trouvait en septième
+position entre deux cadenas « à la sortie ».
+
+- **À gagner pendant la bêta** — le classique, la turquoise, la violette, le
+  Bêta-testeur, en grand, dans l'ordre de `js/edition.js` (du plus facile au
+  plus rare).
+- **À la sortie du jeu — 9 janvier 2027** — les sept autres, en petit : un
+  uniforme qu'on ne peut pas obtenir n'a pas besoin de la place d'un uniforme à
+  conquérir.
+
+Dans la version finale tout se gagne : un seul groupe, la grille et l'ordre
+d'avant.
+
+Une seule fonction, `casesVestiaire()`, dit où est chaque case. Le dessin la
+lit pour dessiner, le clavier pour savoir ce qu'il y a au-dessus et en dessous.
+Deux descriptions de la même grille finissent toujours par se contredire.
+
+Au passage : Entrée sur un uniforme « à la sortie » faisait dire au robot
+comment le débloquer (« en battant Kirby 67 ») alors qu'il ne peut pas l'être
+en bêta. Il dit maintenant la date.
+
+## 5. La phrase du niveau 2
+
+« La ville. Brad en connaît un rayon sur certaines villes. » J'ai accordé
+« connaît » ; le reste est le tien.
+
+## 6. Brad partait vers la gauche et ne s'arrêtait plus
+
+**Ce que c'est.** Une commande restée « enfoncée » pour le jeu, parce que le
+*relâchement* de la touche ne lui est jamais parvenu. Le symptôme se reproduit
+tel que tu le décris : −150 px/s sans aucune touche, **0 tant qu'on tient →**,
+−150 dès qu'on la lâche. Appuyer à droite n'annule que le temps de l'appui —
+d'où « même si le joueur essaye de reprendre le contrôle ». Seul un appui sur
+← le libérait.
+
+Ce n'est pas le boss : Brad posé sur la tête du Colosse rebondit une à deux
+fois, pas en boucle.
+
+**Ce que je ne sais pas.** Je n'ai pas pu rejouer ta partie : je ne sais pas
+*laquelle* des façons de perdre un relâchement s'est produite ce jour-là. J'en
+ai trouvé quatre, dont deux que je sais provoquer :
+
+| Comment le relâchement se perd | Reproduit | La parade |
+|---|---|---|
+| La **lettre change** entre l'appui et le relâchement. La touche du coin (A en AZERTY) n'était reconnue que par sa lettre ; avec Option, elle annonce « æ » en se relâchant | oui : 14 tuiles sans s'arrêter | le jeu note à l'appui quelle *touche physique* fait quelle action, et relit cette note au relâchement |
+| **⌘ sur Mac.** Tant qu'elle est enfoncée, macOS ne signale aucun relâchement — et ⌘ est sous le pouce, à côté d'Espace | oui : 14 tuiles | une touche avec ⌘ est un raccourci du système, pas une commande de jeu : tout est lâché, à l'appui et au relâchement de ⌘ |
+| **La fenêtre change d'état** : plein écran quitté, onglet caché, menu contextuel, fenêtre redimensionnée | non — pas sans Safari | tout est lâché à chacun de ces événements |
+| La fenêtre perd le focus | — | déjà traité |
+
+Mon hypothèse la plus probable est la troisième, **sans preuve** : tu joues en
+plein écran dans Safari, Échap en sortait, et une fenêtre qui se réduit avale
+volontiers un relâchement. Si c'est bien ça, le point 3 la supprime à la
+source.
+
+**Ce que j'ai écarté.** Faire « gagner » la dernière direction pressée, ou
+oublier une direction dès qu'on appuie sur l'autre : ça aurait guéri le
+symptôme, mais ça change la conduite de Brad pour tout le monde — tenir
+gauche, taper droite, et ne plus repartir à gauche. Un filet qui modifie la
+sensation du jeu n'est pas un filet.
+
+**S'il reparaît**, c'est qu'il existe une cinquième porte. Dis-moi alors où
+(niveau, base, boss), avec quelles touches (flèches ou ZQSD), et ce que tu
+venais de faire.
+
+## 7. Z Q S D dans le vestiaire
+
+Toute lettre tapée dans le vestiaire partait dans le champ de code : naviguer
+avec ZQSD, comme partout ailleurs, y écrivait « ZQSD ».
+
+**On n'écrit dans le champ que si on y est entré.** Il a trois états :
+
+- **au repos** — une case comme une autre, tout en bas ;
+- **choisi** — on y arrive aux flèches (↓ sous la dernière rangée) ou à la
+  souris ; Entrée, ou un clic, fait entrer dedans ;
+- **en saisie** — le clavier écrit. Entrée valide, Échap abandonne, une flèche
+  en sort.
+
+Hors saisie, Z Q S D naviguent et ne peuvent plus rien écrire. De haut en bas :
+la grille, le champ de code, « Sortir ». On sort donc avec S seul.
+
+Le jukebox n'a pas changé : son onglet « Code » est *déjà* l'interaction — on
+n'y arrive qu'en le choisissant.
+
+## Ce que je n'ai pas fait, et qu'il faut savoir
+
+- **Rien n'a été essayé dans Safari**, ni le point 3 ni le point 6. C'est le
+  navigateur où tu joues, et c'est celui que je ne peux pas ouvrir.
+- **Les suites `verif.mjs` et `verif-beta.mjs` ne sont toujours pas rejouées**
+  (pas de Node ici). J'y ai changé une ligne chacune : elles choisissaient un
+  uniforme par son rang dans la liste, c'est maintenant son rang à l'écran.
+  Changées, pas exécutées.
+- **Toujours en attente de ta réponse** depuis le prototype 26 : reculer ou non
+  le premier ennemi derrière les changements de décor des niveaux 2 à 10 ; le
+  nom et le rythme du bonus de régénération ; « cinq niveaux joués » ou
+  « terminés » pour la cravate verte.
+
+## Vérification
+
+`tools/verif-26.js` s'appelle maintenant `tools/verif-navigateur.js` : un nom
+de prototype sur une suite qui lui survit, c'était un nom qui allait mentir.
+Elle se lance comme avant.
+
+```
+python3 tools/serveur.py                     édition bêta     172 vérifications
+python3 tools/serveur.py --edition finale    édition finale   191 vérifications
+```
+
+```js
+var s = document.createElement('script'); s.src = 'tools/verif-navigateur.js'; document.head.appendChild(s);
+```
+
+**0 échec sur trois exécutions consécutives de chacune.** Les sections A à O
+sont celles du prototype 26, trois d'entre elles retouchées (le chemin du
+vestiaire, P dans la base). Les nouvelles :
+
+```
+                                                        bêta   finale
+P. LA BANDE-ANNONCE GARDE SA MUSIQUE .................     5       5
+Q. UNE TOUCHE LÂCHÉE EST LÂCHÉE ......................    14      14
+R. ÉCHAP NE FAIT PLUS SORTIR DU PLEIN ÉCRAN ..........     2       2
+S. QUITTER LA BASE DEMANDE CONFIRMATION ..............     7       7
+T. LE VESTIAIRE ......................................    23      21
+U. LA PHRASE DU NIVEAU 2 .............................     3       3
+```
+
+**Elle sait échouer.** Lancée contre le prototype 26, elle échoue sur
+**18 vérifications**, aux bons endroits : la musique de la bande-annonce y
+devient `boss3.m4a`, la touche A avec Option et la flèche lâchée sous ⌘ y
+restent bloquées quatorze tuiles, P y renvoie au menu sans demander.
+
+**Ce qu'elle ne remplace pas.** Elle vérifie que le jeu *annule* l'action
+d'Échap, pas que Safari en tient compte ; que le jeu *lâche tout* quand on lui
+annonce un changement de plein écran, pas que Safari l'annonce. La moitié de
+ces deux corrections se passe dans un navigateur qu'elle ne voit pas.
+
+## Pour déployer
+
+`brad-bitt-code-27-beta.zip` par-dessus le dépôt. Il contient aussi
+`assets/audio/menu-principal.m4a`, au cas où la 26 n'aurait pas été déposée.
+
+Si la 26 a été déposée, **supprime `tools/verif-26.js` du dépôt** : l'archive
+apporte `tools/verif-navigateur.js` mais ne peut pas effacer l'ancien, qui
+resterait là à vérifier une version qui n'existe plus.
+
+Aucune clef nouvelle dans le navigateur ; une partie de la 0.25 ou de la 0.26
+se relit telle quelle. Le rang de l'uniforme porté n'est pas enregistré — c'est
+son nom qui l'est — donc le nouveau rangement du vestiaire ne change rien aux
+parties existantes.
+
+Version du jeu : **0.27 bêta**.
 

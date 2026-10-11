@@ -218,6 +218,7 @@ function ouvrirPoste(cle) {
   audio.bruit('valider');
   indexBoutique = 0; ongletBoutique = 0; confirmation = null;
   indexVestiaire = 0; indexCarte = 0; focusSortir = false;
+  vestiaireCode.focus = false; vestiaireCode.actif = false; vestiaireCode.saisie = '';
   if (cle === 'arcade') { ouvrirArcade(); return; }
   if (cle === 'jukebox') { ouvrirJukebox(); return; }
   if (cle === 'portail') { ouvrirPortailFinal(); return; }
@@ -235,7 +236,25 @@ function fermerPoste() {
   audio.bruit('menu');
   confirmation = null;
   focusSortir = false;
+  vestiaireCode.focus = false; vestiaireCode.actif = false;
   scene = 'hub';
+}
+
+/* QUITTER LA BASE DEMANDE CONFIRMATION.
+
+   P (ou Echap, ou un clic sur le rappel du bandeau) renvoyait au menu principal
+   d'un coup. Rien n'y est perdu — la partie est sauvegardee — mais on se
+   retrouve ailleurs sans l'avoir voulu, a une touche de « Nouvelle partie ».
+   Et P est a cote de O, de M et d'Entree. On demande donc, avec la meme boite
+   que partout : ← → pour choisir, Entree pour valider. */
+function demanderRetourMenu() {
+  if (confirmation) return;
+  relacherTout();
+  demanderConfirmation(
+    // Espaces insecables autour de « Continuer » : le texte est coupe aux
+    // espaces, et un guillemet ouvrant restait seul en fin de ligne.
+    'Tu retournes au menu principal ? Ta partie est sauvegardée : «\u00a0Continuer\u00a0» te ramènera ici.',
+    () => { retourAuMenu(); relacherTout(); });
 }
 
 function entrerHub(premiere) {
@@ -686,8 +705,8 @@ function hudHub(c) {
   ctx.fillText('LA BASE', 92, 17);
 
   /* La sortie vers le menu principal, ECRITE. Elle n'existait que sous Echap,
-     sans un mot a l'ecran — et Echap, en plein ecran, ne parvient pas au jeu.
-     P fait la meme chose, et le libelle se touche. */
+     sans un mot a l'ecran. P fait la meme chose, et le libelle se touche. Les
+     trois chemins demandent confirmation (voir demanderRetourMenu). */
   if (scene === 'hub' && !confirmation) {
     const t = estTactile ? 'Menu principal' : 'P · Menu principal';
     const lt = ctx.measureText(t).width;
@@ -728,10 +747,16 @@ let confirmation = null;         // { texte, oui, choix } — choix : 0 = oui, 1
    « SORTIR » SE CHOISIT AUX FLECHES
 
    Chaque panneau de la base avait bien un bouton « Sortir », mais la souris
-   seule pouvait l'atteindre : au clavier il ne restait qu'Echap. Or en plein
-   ecran, le navigateur garde Echap pour lui — il quitte le plein ecran avant
-   meme que le jeu n'entende la touche. Un joueur au clavier se retrouvait donc
-   a sortir du plein ecran pour sortir de la boutique.
+   seule pouvait l'atteindre : au clavier il ne restait qu'Echap. Or dans
+   Safari, Echap quittait AUSSI le plein ecran : un joueur au clavier sortait
+   du plein ecran chaque fois qu'il sortait de la boutique.
+
+   (La cause de ce second effet a ete corrigee a la racine au prototype 27 —
+   le jeu annule desormais l'action par defaut de la touche, voir
+   js/entrees.js. Ce que j'en disais au prototype 26, que le jeu « n'entend
+   pas » Echap en plein ecran, etait faux pour le plein ecran de la fenetre.
+   Le bouton au clavier reste utile pour lui-meme : aucun ecran ne devrait
+   avoir une seule sortie, connue de ceux qui la connaissent deja.)
 
    Le bouton devient le DERNIER CHOIX de chaque liste : on descend jusqu'a lui
    (ou on remonte depuis le premier), il s'allume, Entree sort. Echap marche
@@ -838,9 +863,9 @@ function dessinerConfirmation() {
   /* LES DEUX REPONSES SE CHOISISSENT AUX FLECHES.
 
      Avant : Entree valait « oui », Echap valait « non », et rien d'autre. Pas
-     de selection visible, pas de fleches — et Echap, en plein ecran, ne
-     parvient pas au jeu. Il ne restait donc au clavier qu'un seul bouton
-     utilisable : acheter.
+     de selection visible, pas de fleches — et dans Safari, Echap faisait
+     aussi quitter le plein ecran. Dire « non » au clavier coutait donc le
+     plein ecran.
 
      `confirmation.choix` dit lequel des deux est allume ; ← → le deplacent,
      Entree valide CELUI-LA. La souris qui bouge au-dessus d'un bouton prend la
@@ -901,7 +926,9 @@ function toucheConfirmation(e, lettre, valider, annuler) {
     audio.bruit('menu');
   } else if (valider) {
     repondreConfirmation(confirmation.choix === 0);
-  } else if (annuler) {
+  } else if (annuler || (lettre === 'p' && !e.repeat)) {
+    // P referme la question comme Echap : c'est souvent P qui l'a ouverte, et
+    // la meme touche doit pouvoir defaire ce qu'elle vient de faire.
     repondreConfirmation(false);
   }
   return true;
@@ -1127,14 +1154,98 @@ function acheterArticleCourant() {
    5. VESTIAIRE
 -------------------------------------------------------------------------- */
 
-let indexVestiaire = 0;
+let indexVestiaire = 0;          // rang dans ordreVestiaire(), PAS dans UNIFORMES
 
-/* Six colonnes. Il y en avait cinq, pour dix uniformes ; le skin de la beta
-   est le onzieme, et une troisieme rangee recouvrirait la description et le
-   champ de code — exactement le defaut corrige au prototype 24. Les fleches
-   haut et bas du clavier sautent d'une rangee : elles lisent CETTE constante,
-   pas un 5 ecrit a la main ailleurs. */
+/* Six colonnes dans la version finale : onze uniformes, deux rangees. Une
+   troisieme recouvrirait la description et le champ de code — le defaut
+   corrige au prototype 24. */
 const VESTIAIRE_COLONNES = 6;
+
+/* -----------------------------------------------------------------------------
+   L'ORDRE ET LA PLACE DES UNIFORMES
+
+   Pendant la beta, quatre uniformes se gagnent et sept attendent la sortie.
+   Ils etaient ranges dans l'ordre de la liste, donc MELANGES : la cravate
+   turquoise, gagnable, se trouvait en septieme position, entre deux cadenas
+   « a la sortie ». On ne voyait pas d'un coup d'oeil ce qu'il y avait a
+   gagner.
+
+   Ils sont maintenant en deux groupes, chacun sous son titre : ce qui se gagne
+   pendant la beta, en grand, puis ce qui viendra, en petit — un uniforme qu'on
+   ne peut pas obtenir n'a pas besoin de la meme place qu'un uniforme a
+   conquerir. Dans la version finale tout se gagne : un seul groupe, la grille
+   d'avant, dans l'ordre d'avant.
+
+   UNE SEULE FONCTION DIT OU EST CHAQUE CASE. Le dessin la lit pour dessiner,
+   le clavier la lit pour savoir ce qu'il y a « en dessous » ou « au-dessus »
+   d'une case. Deux descriptions de la meme grille finissent toujours par se
+   contredire : c'est comme ça que les fleches sautaient d'une rangee de six
+   alors que l'ecran en montrait cinq.
+-------------------------------------------------------------------------- */
+
+function ordreVestiaire() {
+  if (!BETA) return UNIFORMES;
+  /* Les uniformes de la beta, dans l'ordre ou js/edition.js les enumere — le
+     classique, puis du plus facile au plus rare — et non dans celui de la
+     liste generale, ou la cravate violette (mille points a l'arcade) passait
+     avant la turquoise (un passage au camp). */
+  const dispo = UNIFORMES_BETA.map(cle => UNIFORMES.find(u => u.cle === cle)).filter(Boolean);
+  return dispo.concat(UNIFORMES.filter(u => dispo.indexOf(u) < 0));
+}
+
+/* Rend { cases, titres }. Une case : { u, i, x, y, w, h, rang, petite }. */
+function casesVestiaire() {
+  const cases = [], titres = [];
+  const ordre = ordreVestiaire();
+  // `colonnes` : sur combien de cases la rangee se centre. Sans lui, sur les
+  // siennes ; avec, une rangee incomplete reste alignee sous la precedente.
+  const poserRangee = (liste, depart, y, lw, h, rang, petite, colonnes) => {
+    const x0 = Math.round((LARGEUR - (colonnes || liste.length) * lw) / 2);
+    liste.forEach((u, k) => cases.push({
+      u, i: depart + k, x: x0 + k * lw + 4, y, w: lw - 8, h, rang, petite,
+    }));
+  };
+
+  if (!BETA) {
+    for (let d = 0, rang = 0; d < ordre.length; d += VESTIAIRE_COLONNES, rang++) {
+      poserRangee(ordre.slice(d, d + VESTIAIRE_COLONNES), d, 80 + rang * 94, 90, 84, rang, false,
+                  VESTIAIRE_COLONNES);
+    }
+    return { cases, titres };
+  }
+
+  const dispo = ordre.filter(u => uniformeDansEdition(u.cle));
+  const plusTard = ordre.filter(u => !uniformeDansEdition(u.cle));
+  titres.push({ y: 80, texte: 'À GAGNER PENDANT LA BÊTA', couleur: 'rgba(232,182,44,.85)' });
+  poserRangee(dispo, 0, 85, 90, 84, 0, false);
+  if (plusTard.length) {
+    titres.push({ y: 186, texte: 'À LA SORTIE DU JEU — ' + DATE_SORTIE.toUpperCase(),
+                  couleur: 'rgba(126,206,255,.6)' });
+    // Sept par rangee : les sept uniformes de la sortie tiennent sur une ligne.
+    const parRangee = 7;
+    for (let d = 0, rang = 1; d < plusTard.length; d += parRangee, rang++) {
+      poserRangee(plusTard.slice(d, d + parRangee), dispo.length + d,
+                  191 + (rang - 1) * 62, 74, 56, rang, true);
+    }
+  }
+  return { cases, titres };
+}
+
+/* La case « au-dessus » (sens -1) ou « en dessous » (sens +1) : celle de la
+   rangee voisine dont le centre est le plus proche. Rend son rang dans
+   l'ordre, ou null s'il n'y a pas de rangee de ce cote. */
+function voisinVestiaire(index, sens) {
+  const { cases } = casesVestiaire();
+  const ici = cases[index];
+  if (!ici) return null;
+  let mieux = null, ecart = Infinity;
+  for (const c of cases) {
+    if (c.rang !== ici.rang + sens) continue;
+    const e = Math.abs((c.x + c.w / 2) - (ici.x + ici.w / 2));
+    if (e < ecart) { ecart = e; mieux = c.i; }
+  }
+  return mieux;
+}
 
 /* Ce que dit la ligne du bas pour un uniforme donne. Trois cas en plus du
    texte ordinaire : hors de la beta, le skin de la beta pas encore gagne, et
@@ -1153,79 +1264,103 @@ function dessinerVestiaire() {
     ? 'Purement cosmétique. Pendant la bêta : trois uniformes, et un exclusif.'
     : 'Purement cosmétique. Aucun bonus, jamais.');
 
-  const cols = VESTIAIRE_COLONNES, cw = 90, ch = 94;
-  const x0 = (LARGEUR - cols * cw) / 2;
-  const y0 = 80;
+  const { cases, titres } = casesVestiaire();
+  const grilleALaMain = !focusSortir && !vestiaireCode.focus && !vestiaireCode.actif;
 
-  UNIFORMES.forEach((u, i) => {
-    const c = i % cols, r = Math.floor(i / cols);
-    const x = x0 + c * cw, y = y0 + r * ch;
+  for (const t of titres) {
+    ctx.font = 'bold 8px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = t.couleur;
+    ctx.fillText(t.texte, LARGEUR / 2, t.y);
+    // Deux filets de part et d'autre : le titre separe, il ne flotte pas.
+    const lt = ctx.measureText(t.texte).width;
+    ctx.fillStyle = 'rgba(255,255,255,.08)';
+    ctx.fillRect(56, t.y - 3, LARGEUR / 2 - lt / 2 - 66, 1);
+    ctx.fillRect(LARGEUR / 2 + lt / 2 + 10, t.y - 3, LARGEUR / 2 - lt / 2 - 66, 1);
+    ctx.textAlign = 'left';
+  }
+
+  for (const c of cases) {
+    const u = c.u, i = c.i;
     const survol = souris.survol && souris.survol.action === 'uniforme' && souris.survol.valeur === i;
-    if (survol && souris.bouge && (i !== indexVestiaire || focusSortir)) {
+    if (survol && souris.bouge && (i !== indexVestiaire || !grilleALaMain)) {
       indexVestiaire = i; focusSortir = false;
+      vestiaireCode.focus = false; vestiaireCode.actif = false;
     }
-    const actif = i === indexVestiaire && !focusSortir;
+    const actif = i === indexVestiaire && grilleALaMain;
 
     const ouvert = uniformeDebloque(u);
     const porte = partie.uniforme === u.cle;
+    const cx = c.x + c.w / 2;
 
     ctx.fillStyle = actif ? 'rgba(232,182,44,.14)' : 'rgba(255,255,255,.035)';
-    ctx.fillRect(x + 4, y, cw - 8, ch - 10);
+    ctx.fillRect(c.x, c.y, c.w, c.h);
     if (porte) {
       ctx.strokeStyle = ACCENT; ctx.lineWidth = 2;
-      ctx.strokeRect(x + 5, y + 1, cw - 10, ch - 12);
+      ctx.strokeRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2);
+    } else if (actif) {
+      ctx.strokeStyle = 'rgba(232,182,44,.55)'; ctx.lineWidth = 1;
+      ctx.strokeRect(c.x + .5, c.y + .5, c.w - 1, c.h - 1);
     }
 
     // Apercu du sprite, ou cadenas
     const img = planchesBrad[u.cle];
-    if (ouvert && img) {
+    if (ouvert && img && !c.petite) {
       const { cw: sw, ch: sh } = BRAD_PLANCHE;
-      ctx.drawImage(img, 0, 0, sw, sh, x + cw / 2 - sw / 2, y + 6, sw, sh);
+      ctx.drawImage(img, 0, 0, sw, sh, Math.round(cx - sw / 2), c.y + 6, sw, sh);
     } else {
-      dessinerCadenas(x + cw / 2, y + 30, 1.4, 'rgba(255,255,255,.22)');
+      dessinerCadenas(cx, c.y + (c.petite ? 20 : 30), c.petite ? 0.95 : 1.4, 'rgba(255,255,255,.22)');
     }
 
-    /* Les cases font 90 px au lieu de 110 : un nom trop long passe a une
-       police plus petite plutot que de deborder sur la case voisine. */
+    /* Un nom trop long passe a une police plus petite plutot que de deborder
+       sur la case voisine. */
     ctx.textAlign = 'center';
-    let corps = 10;
+    let corps = c.petite ? 8.5 : 10;
     ctx.font = (actif ? 'bold ' : '') + corps + 'px system-ui, sans-serif';
-    while (corps > 7.5 && ctx.measureText(u.nom).width > cw - 12) {
+    while (corps > 6.5 && ctx.measureText(u.nom).width > c.w - 6) {
       corps -= 0.5;
       ctx.font = (actif ? 'bold ' : '') + corps + 'px system-ui, sans-serif';
     }
-    ctx.fillStyle = ouvert ? (porte ? ACCENT : '#e6e8f0') : 'rgba(255,255,255,.3)';
-    ctx.fillText(u.nom, x + cw / 2, y + ch - 26);
+    ctx.fillStyle = ouvert ? (porte ? ACCENT : '#e6e8f0')
+                           : (actif ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.3)');
+    ctx.fillText(u.nom, cx, c.y + c.h - (c.petite ? 10 : 16));
     if (porte) {
       ctx.font = '8px system-ui, sans-serif';
       ctx.fillStyle = ACCENT;
-      ctx.fillText('PORTÉ', x + cw / 2, y + ch - 15);
+      ctx.fillText('PORTÉ', cx, c.y + c.h - 5);
     }
     ctx.textAlign = 'left';
-    zone(x + 4, y, cw - 8, ch - 10, 'uniforme', i);
-  });
+    zone(c.x, c.y, c.w, c.h, 'uniforme', i);
+  }
 
-  /* DETAIL DE L'UNIFORME SELECTIONNE.
+  /* LA BANDE DU BAS : la description de l'uniforme choisi, sur deux lignes au
+     plus — ou le message du code qu'on vient de valider, qui est plus urgent
+     et s'efface tout seul. Les deux au meme endroit ne se liraient pas.
 
-     Il tenait sur une seule ligne centree, posee a HAUTEUR - 48. Ça marchait
-     tant que les descriptions etaient courtes. Celle du skin 3IRL mesure
-     environ 565 px a 10 px de corps, pour 520 px de panneau : elle depassait
-     des deux cotes et traversait le champ « Code », en bas a droite.
-
-     Elle est maintenant COUPEE sur deux lignes au plus, et remontee dans la
-     bande libre entre la grille d'uniformes (qui finit a 268) et le champ de
-     code (qui commence a 310).
+     Le message du code etait ecrit SOUS le champ, a HAUTEUR - 16 : dix pixels
+     sous le bord du panneau, donc pose sur le decor de la base.
 
      Le cadenas est DESSINE, pas un emoji : un emoji change de forme d'un
      appareil a l'autre et arrive parfois en couleur au milieu d'un texte gris. */
-  const u = UNIFORMES[indexVestiaire];
-  if (u) {
+  const u = ordreVestiaire()[indexVestiaire];
+  if (vestiaireCode.messageT > 0) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, vestiaireCode.messageT);
+    texteCentre(vestiaireCode.message, 294, '11px system-ui, sans-serif',
+                vestiaireCode.succes ? '#7ee08a' : '#e2553b');
+    ctx.restore();
+  } else if (vestiaireCode.focus || vestiaireCode.actif) {
+    // Le champ de code a la main : la bande parle de LUI, pas de la derniere
+    // case survolee — sinon on lit la description d'un uniforme que rien ne
+    // designe plus a l'ecran.
+    texteCentre('Certains uniformes ne se gagnent pas : ils se savent. Si tu as un code, c\'est ici.',
+                294, 'italic 10px system-ui, sans-serif', 'rgba(255,255,255,.5)');
+  } else if (u) {
     const libre = uniformeDebloque(u);
     ctx.font = '10px system-ui, sans-serif';
     const lignes = lignesDe(detailUniforme(u), LARGEUR - 180).slice(0, 2);
     const bas = 300;                       // derniere ligne du bloc
     const haut = bas - (lignes.length - 1) * 13;
-    ctx.fillStyle = libre ? 'rgba(255,255,255,.6)' : 'rgba(226,85,59,.9)';
     ctx.textAlign = 'left';
     lignes.forEach((ligne, i) => {
       const l = ctx.measureText(ligne).width;
@@ -1239,20 +1374,58 @@ function dessinerVestiaire() {
   dessinerCodeVestiaire();
 
   ctx.font = '9px system-ui, sans-serif';
+  ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(255,255,255,.3)';
-  ctx.fillText('Flèches choisir  ·  Entrée porter  ·  ↓ jusqu\'à « Sortir »', 56, HAUTEUR - 33);
+  ctx.fillText(vestiaireCode.actif
+    ? 'Tape le code  ·  Entrée valider  ·  Échap annuler'
+    : 'Flèches ou ZQSD choisir  ·  Entrée porter  ·  ↓ : code, puis « Sortir »',
+    56, HAUTEUR - 33);
 }
 
 /* -----------------------------------------------------------------------------
    LA SAISIE DE CODE
 
-   Certains uniformes ne se gagnent pas, ils se SAVENT. Le champ est toujours
-   la, discret, en bas a droite du vestiaire : on tape, ça s'inscrit, Entree
-   valide. Pas d'onglet, pas de bouton — quelqu'un qui n'a pas de code ne le
-   remarquera meme pas, et quelqu'un qui en a un le trouvera tout de suite.
+   Certains uniformes ne se gagnent pas, ils se SAVENT. Le champ est en bas du
+   vestiaire, a gauche de « Sortir ».
+
+   ON N'Y ECRIT QUE SI ON L'A CHOISI. Avant, toute lettre tapee dans le
+   vestiaire partait dans le champ : un joueur qui navigue avec Z Q S D —
+   comme partout ailleurs dans le jeu — y ecrivait « ZQSD » au lieu de changer
+   de case. Le champ a maintenant trois etats :
+
+     au repos .... une case comme une autre, tout en bas ;
+     choisi ...... on y est arrive aux fleches (↓ depuis la derniere rangee) ou
+                   a la souris ; Entree, ou un clic, fait entrer dedans ;
+     en saisie ... le clavier ECRIT. Entree valide, Echap abandonne, une fleche
+                   en sort.
+
+   Hors saisie, Z Q S D naviguent — et ne peuvent plus rien ecrire.
 -------------------------------------------------------------------------- */
 
-const vestiaireCode = { saisie: '', message: '', messageT: 0, succes: false };
+const vestiaireCode = {
+  saisie: '', message: '', messageT: 0, succes: false,
+  focus: false,          // le champ est CHOISI, comme un bouton
+  actif: false,          // on est en train d'y ecrire
+};
+
+/* La place du champ : a gauche de « Sortir », sans le toucher. Il faisait 152
+   de large a partir de LARGEUR - 208 et finissait donc a LARGEUR - 56 : il
+   passait SOUS le bouton, qui commence a LARGEUR - 96. */
+const VESTIAIRE_CODE = { x: LARGEUR - 96 - 8 - 152, y: HAUTEUR - 46, l: 152, h: 20 };
+
+function entrerSaisieVestiaire() {
+  vestiaireCode.focus = true;
+  vestiaireCode.actif = true;
+  focusSortir = false;
+  audio.bruit('valider');
+}
+
+/* `effacer` : Echap abandonne ce qui etait tape ; une fleche le garde. */
+function quitterSaisieVestiaire(effacer) {
+  vestiaireCode.actif = false;
+  if (effacer) vestiaireCode.saisie = '';
+  audio.bruit('menu');
+}
 
 function tapeCodeVestiaire(c) {
   if (vestiaireCode.saisie.length >= 12) return;
@@ -1290,7 +1463,9 @@ function validerCodeVestiaire() {
   vestiaireCode.message = (u ? u.nom : 'Uniforme') + ' débloqué.';
   audio.bruit('victoire');
   if (u) {
-    indexVestiaire = UNIFORMES.indexOf(u);
+    // On va le montrer : la selection saute sur lui, dans l'ordre AFFICHE.
+    indexVestiaire = Math.max(0, ordreVestiaire().indexOf(u));
+    vestiaireCode.focus = false;
     braddyDit('Tiens donc. Tu connais des gens.');
   }
   return true;
@@ -1299,35 +1474,42 @@ function validerCodeVestiaire() {
 function dessinerCodeVestiaire() {
   if (vestiaireCode.messageT > 0) vestiaireCode.messageT -= 1 / 60;
 
-  const x = LARGEUR - 208, y = HAUTEUR - 46, l = 152, h = 18;
-  ctx.font = '9px system-ui, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(255,255,255,.3)';
-  ctx.fillText('Code', x, y - 4);
+  const { x, y, l, h } = VESTIAIRE_CODE;
+  const survol = souris.survol && souris.survol.action === 'vestiaire-code';
+  if (survol && souris.bouge && !vestiaireCode.actif) { vestiaireCode.focus = true; focusSortir = false; }
+  const choisi = vestiaireCode.focus || vestiaireCode.actif;
 
-  ctx.fillStyle = 'rgba(255,255,255,.05)';
+  ctx.fillStyle = vestiaireCode.actif ? 'rgba(232,182,44,.14)'
+                : (choisi ? 'rgba(232,182,44,.1)' : 'rgba(255,255,255,.05)');
   ctx.fillRect(x, y, l, h);
-  ctx.strokeStyle = vestiaireCode.saisie ? 'rgba(232,182,44,.6)' : 'rgba(255,255,255,.14)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x + .5, y + .5, l - 1, h - 1);
+  ctx.strokeStyle = vestiaireCode.actif ? ACCENT
+                  : (choisi ? 'rgba(232,182,44,.7)' : 'rgba(255,255,255,.14)');
+  ctx.lineWidth = vestiaireCode.actif ? 2 : 1;
+  const d = vestiaireCode.actif ? 1 : .5;
+  ctx.strokeRect(x + d, y + d, l - 2 * d, h - 2 * d);
 
-  ctx.font = 'bold 11px ui-monospace, Menlo, Consolas, monospace';
-  ctx.fillStyle = vestiaireCode.saisie ? '#e8b62c' : 'rgba(255,255,255,.22)';
-  ctx.fillText(vestiaireCode.saisie || 'tape ici…', x + 7, y + 13);
-
-  if (vestiaireCode.messageT > 0) {
-    ctx.font = '9px system-ui, sans-serif';
-    ctx.fillStyle = vestiaireCode.succes ? '#7ee08a' : '#e2553b';
-    ctx.fillText(vestiaireCode.message, x, y + 30);
+  ctx.textAlign = 'left';
+  if (vestiaireCode.actif || vestiaireCode.saisie) {
+    // Le curseur ne clignote que pendant la saisie : il dit « tu ecris ici ».
+    const curseur = vestiaireCode.actif && Math.sin(hub.t * 5) > 0 ? '_' : '';
+    ctx.font = 'bold 11px ui-monospace, Menlo, Consolas, monospace';
+    ctx.fillStyle = '#e8b62c';
+    ctx.fillText(vestiaireCode.saisie + curseur, x + 7, y + 14);
+  } else {
+    ctx.font = (choisi ? 'bold ' : '') + '9px system-ui, sans-serif';
+    ctx.fillStyle = choisi ? '#ffe9a8' : 'rgba(255,255,255,.32)';
+    ctx.fillText(choisi ? (estTactile ? 'Code  ·  touche pour écrire' : 'Code  ·  Entrée pour écrire')
+                        : 'Code…', x + 7, y + 13);
   }
+  zone(x, y, l, h, 'vestiaire-code');
 }
 
 function porterUniformeCourant() {
-  const u = UNIFORMES[indexVestiaire];
+  const u = ordreVestiaire()[indexVestiaire];
   if (!u) return;
   if (!uniformeDebloque(u)) {
     audio.bruit('refus');
-    braddyDit('Pas encore débloqué. ' + u.detail);
+    braddyDit('Pas encore débloqué. ' + detailUniforme(u));
     return;
   }
   partie.uniforme = u.cle;

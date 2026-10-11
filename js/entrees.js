@@ -54,8 +54,58 @@ function marquerFront(action) {
   else if (action === 'parler') parlerPresseCeTick = true;
 }
 
+/* =============================================================================
+   UNE TOUCHE QUE LE JEU CROIT ENFONCEE
+
+   Symptome signale pendant la beta : Brad part vers la gauche et ne s'arrete
+   plus ; appuyer a droite l'immobilise, relacher le fait repartir. C'est une
+   commande restee a « vrai » parce que son RELACHEMENT n'est jamais arrive.
+   Reproduit : -150 px/s sans aucune touche, 0 pendant qu'on tient →, -150 des
+   qu'on la lache — et seul un appui sur ← le libere.
+
+   Le jeu n'apprend qu'une touche est lachee que si le navigateur le lui dit.
+   Quatre cas ou il ne le dit pas, ou mal — chacun a maintenant sa parade :
+
+   1. LA LETTRE CHANGE ENTRE L'APPUI ET LE RELACHEMENT. La touche du coin haut
+      gauche (A en AZERTY, Q en QWERTY) n'est reconnue QUE par sa lettre. Si
+      Option est enfoncee avant de la lacher, le relachement annonce « æ » :
+      inconnu, donc ignore. On retient desormais, a l'appui, quelle TOUCHE
+      PHYSIQUE (`code`) fait quelle action ; au relachement on relit cette
+      note, quelle que soit la lettre.
+
+   2. ⌘ SUR MAC. Tant que ⌘ est enfoncee, macOS ne signale AUCUN relachement
+      des autres touches — et ⌘ est sous le pouce, a cote d'Espace. Une touche
+      avec ⌘ est un raccourci du systeme, pas une commande de jeu : on lache
+      tout, a l'appui comme au relachement de ⌘.
+
+   3. LA FENETRE CHANGE D'ETAT : plein ecran qu'on quitte, onglet qu'on cache,
+      menu contextuel, fenetre redimensionnee. Pendant ces transitions le
+      navigateur peut avaler des evenements. On lache tout a chacune.
+
+   4. LA FENETRE PERD LE FOCUS — celui-la etait deja traite.
+
+   Je n'ai pas pu rejouer la partie ou le defaut est apparu : je ne sais donc
+   pas LAQUELLE de ces portes etait ouverte ce jour-la. Elles sont toutes
+   fermees ; s'il reparait, c'est qu'il en existe une cinquieme.
+========================================================================== */
+
+const touchesTenues = {};        // code de la touche physique -> action
+
 function relacherTout() {
   Object.keys(entrees).forEach(k => { entrees[k] = false; });
+  for (const c of Object.keys(touchesTenues)) delete touchesTenues[c];
+}
+
+/* Une commande de jeu enfoncee : on la note sous sa touche physique. */
+function enfoncer(e, action) {
+  if (FRONTS[action] && !entrees[action]) marquerFront(action);
+  entrees[action] = true;
+  if (e && e.code) touchesTenues[e.code] = action;
+}
+
+function estToucheCommande(e) {
+  return e.key === 'Meta' || e.code === 'MetaLeft' || e.code === 'MetaRight' ||
+         e.code === 'OSLeft' || e.code === 'OSRight';
 }
 
 /* Le corps du gestionnaire est une FONCTION NOMMEE, et pas seulement pour la
@@ -65,8 +115,26 @@ function relacherTout() {
    generique, bande-annonce — sans en reecrire une ligne. */
 function auClavier(e) {
   if (!e.preventDefault) e.preventDefault = () => {};
+  // Un raccourci du systeme n'est pas une commande de jeu, et tant que ⌘ est
+  // enfoncee macOS ne signale aucun relachement : voir plus haut. On ne
+  // touche pas a l'evenement — ⌘Q doit toujours quitter.
+  if (e.metaKey || estToucheCommande(e)) { relacherTout(); relacherFinal(); return; }
   if (e.code === 'F1') { e.preventDefault(); basculerPanneau(); return; }
   if (TOUCHES_DEFILEMENT.includes(e.code)) e.preventDefault();
+  /* ECHAP NE DOIT PAS FAIRE SORTIR DU PLEIN ECRAN.
+
+     Dans Safari, Echap quitte le plein ecran de la fenetre — SAUF si la page
+     annule l'action par defaut de la touche. Le jeu ne l'annulait pas : chaque
+     Echap ouvrait donc la pause ET reduisait la fenetre. C'est une ligne.
+
+     (J'avais ecrit au prototype 26 que le navigateur « garde Echap pour lui »
+     et que le jeu ne l'entend pas. C'est vrai du plein ecran demande par une
+     page — l'API Fullscreen — que le jeu n'utilise pas. Pour le plein ecran de
+     la fenetre, celui du bouton vert, c'etait faux : la touche arrive bien.)
+
+     Non essaye dans Safari, que je ne peux pas piloter : c'est le comportement
+     documente, a confirmer sur place. */
+  if (e.code === 'Escape') e.preventDefault();
 
   const lettre = (e.key || '').toLowerCase();
   /* UNE TOUCHE TENUE NE VALIDE RIEN.
@@ -84,11 +152,10 @@ function auClavier(e) {
   const annuler = e.code === 'Escape';
   /* P : LA TOUCHE QUI FAIT CE QUE FAIT ECHAP, LA OU ON NE TAPE PAS DE TEXTE.
 
-     En plein ecran, le navigateur garde Echap pour lui : la premiere pression
-     quitte le plein ecran et n'arrive jamais jusqu'au jeu. Dans les panneaux,
-     « Sortir » se choisit aux fleches (voir focusSortir, js/hub.js). En jeu et
-     dans la base il n'y a pas de liste ou le ranger : P ouvre donc la pause,
-     quitte la base, et passe un dialogue. */
+     Une seconde touche pour la meme chose, sous la main droite. Dans les
+     panneaux, « Sortir » se choisit aux fleches (voir focusSortir, js/hub.js).
+     En jeu et dans la base il n'y a pas de liste ou le ranger : P ouvre donc
+     la pause, demande a quitter la base, et passe un dialogue. */
   const toucheP = lettre === 'p' && !e.repeat;
 
   // Une question posee passe avant tout le reste, quelle que soit la scene.
@@ -213,11 +280,10 @@ function auClavier(e) {
       // touches de deplacement ne font pas marcher Brad derriere la question.)
       // Le hub se joue : on laisse passer les commandes de deplacement, et le
       // saut sert d'action devant un poste (majHub le consomme).
-      if (annuler || toucheP) { retourAuMenu(); relacherTout(); return; }
+      if (annuler || toucheP) { demanderRetourMenu(); return; }
       const ah = actionDe(e);
       if (!ah) return;
-      if (FRONTS[ah] && !entrees[ah]) marquerFront(ah);
-      entrees[ah] = true;
+      enfoncer(e, ah);
       return;
     }
 
@@ -239,47 +305,64 @@ function auClavier(e) {
       }
       return;
 
-    /* Le vestiaire accepte une SAISIE DE CODE. Les lettres et les chiffres vont
-       donc au champ, et la navigation passe par les fleches seules — ZQSD y
-       naviguait avant, mais on ne peut pas a la fois taper « FNAM3RL » et
-       traiter le S comme « descendre ». Les fleches suffisent, et le champ
-       reste inutile a qui n'a pas de code. */
-    case 'vestiaire':
-      if (annuler) {
-        if (vestiaireCode.saisie) { vestiaireCode.saisie = ''; audio.bruit('menu'); return; }
-        fermerPoste(); return;
+    /* LE VESTIAIRE. Z Q S D y naviguent comme partout ailleurs ; le clavier
+       n'ecrit dans le champ de code QUE si on y est entre (voir « la saisie
+       de code », js/hub.js). De haut en bas : la grille, le champ de code,
+       « Sortir ». */
+    case 'vestiaire': {
+      if (vestiaireCode.actif) {
+        // --- En saisie : le clavier ecrit.
+        if (annuler) { quitterSaisieVestiaire(true); return; }
+        if (e.code === 'Backspace') { e.preventDefault(); effaceCodeVestiaire(); return; }
+        if (!e.repeat && (e.code === 'Enter' || e.code === 'NumpadEnter')) {
+          if (vestiaireCode.saisie) { validerCodeVestiaire(); vestiaireCode.actif = false; }
+          else quitterSaisieVestiaire(false);
+          return;
+        }
+        // Une fleche sort de la saisie en gardant ce qui est tape, puis
+        // deplace la selection comme d'habitude (suite du `case`).
+        if (!(haut || bas || gauche || droite)) {
+          if (/^[a-z0-9]$/.test(lettre)) tapeCodeVestiaire(lettre);
+          return;
+        }
+        vestiaireCode.actif = false;
       }
-      if (e.code === 'Backspace') { e.preventDefault(); effaceCodeVestiaire(); return; }
-      if (focusSortir) {
-        /* « Sortir » est sous la grille : ↑ y remonte, a la colonne d'ou l'on
-           venait ; ↓ ne va nulle part. Une lettre repart vers le champ de
-           code, comme d'habitude. */
-        if (haut || gauche || droite) { focusSortir = false; audio.bruit('menu'); }
-        else if (valider) { if (!validerCodeVestiaire()) fermerPoste(); }
-        else if (/^[a-z0-9]$/.test(lettre)) tapeCodeVestiaire(lettre);
+      if (annuler) { fermerPoste(); return; }
+      if (e.code === 'Backspace') { e.preventDefault(); return; }   // pas de « page precedente »
+
+      const vHaut = haut || lettre === 'z' || lettre === 'w';
+      const vBas = bas || lettre === 's';
+      const vGauche = gauche || lettre === 'q';
+      const vDroite = droite || lettre === 'd';
+      const n = ordreVestiaire().length;
+
+      if (vestiaireCode.focus) {
+        // --- Le champ de code est choisi, on n'y ecrit pas encore.
+        if (vHaut) { vestiaireCode.focus = false; audio.bruit('menu'); }
+        else if (vBas || vDroite) { vestiaireCode.focus = false; focusSortir = true; audio.bruit('menu'); }
+        else if (valider) entrerSaisieVestiaire();
         return;
       }
-      if (gauche) {
-        indexVestiaire = (indexVestiaire - 1 + UNIFORMES.length) % UNIFORMES.length;
-        audio.bruit('menu');
-      } else if (droite) {
-        indexVestiaire = (indexVestiaire + 1) % UNIFORMES.length;
-        audio.bruit('menu');
-      } else if (haut) {
-        indexVestiaire = Math.max(0, indexVestiaire - VESTIAIRE_COLONNES); audio.bruit('menu');
-      } else if (bas) {
-        // Depuis la DERNIERE rangee, ↓ descend sur « Sortir ».
-        const derniereRangee = Math.floor((UNIFORMES.length - 1) / VESTIAIRE_COLONNES);
-        if (Math.floor(indexVestiaire / VESTIAIRE_COLONNES) >= derniereRangee) focusSortir = true;
-        else indexVestiaire = Math.min(UNIFORMES.length - 1, indexVestiaire + VESTIAIRE_COLONNES);
-        audio.bruit('menu');
-      } else if (valider) {
-        // Entree valide le code s'il y en a un a valider, sinon elle habille.
-        if (!validerCodeVestiaire()) porterUniformeCourant();
-      } else if (/^[a-z0-9]$/.test(lettre)) {
-        tapeCodeVestiaire(lettre);
+      if (focusSortir) {
+        if (vHaut || vGauche) { focusSortir = false; vestiaireCode.focus = true; audio.bruit('menu'); }
+        else if (valider) fermerPoste();
+        return;
       }
+      // --- La grille.
+      if (vGauche) { indexVestiaire = (indexVestiaire - 1 + n) % n; audio.bruit('menu'); }
+      else if (vDroite) { indexVestiaire = (indexVestiaire + 1) % n; audio.bruit('menu'); }
+      else if (vHaut) {
+        const v = voisinVestiaire(indexVestiaire, -1);
+        if (v !== null) indexVestiaire = v;
+        audio.bruit('menu');
+      } else if (vBas) {
+        // Sous la derniere rangee : le champ de code, puis « Sortir ».
+        const v = voisinVestiaire(indexVestiaire, 1);
+        if (v !== null) indexVestiaire = v; else vestiaireCode.focus = true;
+        audio.bruit('menu');
+      } else if (valider) porterUniformeCourant();
       return;
+    }
 
     case 'carte':
       if (annuler) { fermerPoste(); return; }
@@ -304,8 +387,7 @@ function auClavier(e) {
       }
       const aa = actionDe(e);
       if (!aa) return;
-      if (FRONTS[aa] && !entrees[aa]) marquerFront(aa);
-      entrees[aa] = true;
+      enfoncer(e, aa);
       return;
     }
 
@@ -393,23 +475,53 @@ function auClavier(e) {
 
   const a = actionDe(e);
   if (!a) return;
-  if (FRONTS[a] && !entrees[a]) marquerFront(a);
-  entrees[a] = true;
+  enfoncer(e, a);
 }
 addEventListener('keydown', auClavier);
 
 function auRelachement(e) {
+  // ⌘ relachee : ce qui a ete lache pendant qu'elle etait enfoncee n'a rien dit.
+  if (estToucheCommande(e)) { relacherTout(); relacherFinal(); return; }
+  /* L'action est celle NOTEE A L'APPUI pour cette touche physique. La lettre
+     que porte le relachement peut avoir change entre-temps (Option, verrouillage
+     majuscule, changement de disposition) : s'y fier, c'est laisser la
+     commande enfoncee pour toujours. */
+  const notee = e.code ? touchesTenues[e.code] : undefined;
+  if (e.code) delete touchesTenues[e.code];
   if (scene === 'final') {
     const af = actionFinale(e);
     if (af) entreesFinal[af] = false;
+    if (notee) entrees[notee] = false;
     return;
   }
-  const a = actionDe(e);
+  const a = notee || actionDe(e);
   if (a) entrees[a] = false;
 }
 addEventListener('keyup', auRelachement);
 
-addEventListener('blur', () => { relacherTout(); relacherFinal(); });
+/* TOUT LACHER QUAND LA FENETRE CHANGE D'ETAT. Voir « une touche que le jeu
+   croit enfoncee », plus haut. Lacher a tort ne coute qu'un appui a refaire ;
+   ne pas lacher coute un Brad qui court tout seul. */
+function toutLacher() { relacherTout(); relacherFinal(); }
+
+addEventListener('blur', toutLacher);
+addEventListener('pagehide', toutLacher);
+addEventListener('contextmenu', toutLacher);
+document.addEventListener('visibilitychange', () => { if (document.hidden) toutLacher(); });
+['fullscreenchange', 'webkitfullscreenchange'].forEach(nom =>
+  document.addEventListener(nom, toutLacher));
+
+/* Le plein ecran de la fenetre (le bouton vert de macOS) ne previent par aucun
+   evenement qui lui soit propre : il se lit a la taille EXTERIEURE de la
+   fenetre, qui saute. On ne reagit qu'a un vrai saut — sur telephone, la barre
+   d'adresse qui se replie change la taille interieure plusieurs fois par
+   minute, et lacher les commandes a chaque fois couperait la course. */
+const fenetreVue = { l: window.outerWidth || 0, h: window.outerHeight || 0 };
+addEventListener('resize', () => {
+  const l = window.outerWidth || 0, h = window.outerHeight || 0;
+  if (Math.abs(l - fenetreVue.l) > 40 || Math.abs(h - fenetreVue.h) > 40) toutLacher();
+  fenetreVue.l = l; fenetreVue.h = h;
+});
 
 /* --- Souris ---------------------------------------------------------------
    Le menu etant dessine dans le canvas, il faut convertir les coordonnees de
@@ -782,6 +894,7 @@ const manette = { boutons: {}, tenues: {}, branchee: false };
 function evenementManette(enfonce, touche) {
   if (enfonce) { auClavier({ code: touche.code, key: touche.key }); return; }
   const e = { code: touche.code, key: touche.key };
+  delete touchesTenues[touche.code];
   const a = actionDe(e);
   if (a) entrees[a] = false;
   const af = actionFinale(e);

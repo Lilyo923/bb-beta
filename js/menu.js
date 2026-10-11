@@ -1350,7 +1350,7 @@ function activerZone(z) {
     case 'difficulte-ok': validerDifficulte(); break;
     case 'difficulte-retour': quitterChoixDifficulte(); break;
     case 'quitter-pret':  quitterPret(); break;
-    case 'hub-menu':      retourAuMenu(); relacherTout(); break;
+    case 'hub-menu':      demanderRetourMenu(); break;
     case 'parler-braddy': parlerAuBraddy(); break;
 
     // --- dialogue
@@ -1368,7 +1368,10 @@ function activerZone(z) {
     case 'confirmer-non':   repondreConfirmation(false); break;
 
     // --- vestiaire et carte
-    case 'uniforme': indexVestiaire = z.valeur; porterUniformeCourant(); break;
+    case 'uniforme': indexVestiaire = z.valeur; focusSortir = false;
+                     vestiaireCode.focus = false; vestiaireCode.actif = false;
+                     porterUniformeCourant(); break;
+    case 'vestiaire-code': entrerSaisieVestiaire(); break;
     case 'niveau':   indexCarte = z.valeur; lancerNiveauCourant(); break;
 
     // --- arcade

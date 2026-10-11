@@ -84,6 +84,32 @@ const audio = {
   echecs: new Set(),          // sources qu'aucun format n'a pu charger
   lectureRefusee: false,      // le navigateur a refuse de lancer la lecture
 
+  /* -----------------------------------------------------------------------
+     UNE PISTE RESERVEE NE SE FAIT PAS COUPER
+
+     La bande-annonce fait TOURNER LE MOTEUR : ses plans de boss font entrer
+     Brad dans une vraie arene, et une vraie arene lance la musique de son
+     boss. Le morceau de la bande-annonce etait donc mis en pause a 30,9 s, au
+     premier plan de boss, et remplace par le theme du boss 3, puis du 6, puis
+     du 9 — le montage finissait cale sur un morceau qui n'etait plus le sien.
+
+     Le defaut dormait depuis le prototype 18. Il ne s'entendait pas tant que
+     les fichiers boss3 / boss6 / boss9 n'etaient pas dans assets/audio : une
+     piste introuvable ne remplace rien. Le jour ou le dossier a ete complet
+     (prototype 26), il s'est reveille.
+
+     Pendant qu'une piste est reservee, le reste du jeu peut demander ce qu'il
+     veut — une arene, une porte, une mort, la base : seule la piste reservee
+     joue, et personne ne l'arrete. C'est un verrou a UN endroit plutot qu'un
+     « sauf pendant la bande-annonce » a chaque endroit ou le moteur touche a
+     la musique : le prochain qui en ajoutera un n'aura pas a y penser.
+  -------------------------------------------------------------------------- */
+  reservee: null,             // source de la seule piste autorisee, ou null
+
+  reserver(src) { this.reservee = src; },
+  liberer() { this.reservee = null; },
+  refuse(src) { return this.reservee !== null && src !== this.reservee; },
+
   autreFormat(src) {
     if (src.endsWith('.m4a')) return src.slice(0, -4) + '.mp3';
     if (src.endsWith('.mp3')) return src.slice(0, -4) + '.m4a';
@@ -161,15 +187,19 @@ const audio = {
      — sinon deux morceaux demarrent l'un sur l'autre. */
   jouerMusiqueDifferee(src, fondu) {
     if (!this.debloque) return;
+    if (this.refuse(src)) return;
     if (this.pistes.has(src)) return this.jouerMusique(src, fondu);
     this.demandee = src;
     this.precharger(src).then(() => {
-      if (this.demandee === src) this.jouerMusique(src, fondu);
+      // La reserve est reverifiee a l'ARRIVEE du fichier : il a pu se passer
+      // une seconde entre la demande et la reponse.
+      if (this.demandee === src && !this.refuse(src)) this.jouerMusique(src, fondu);
     });
   },
 
   jouerMusique(src, fondu) {
     if (!this.debloque) return;
+    if (this.refuse(src)) return;
     this.demandee = src;
     const el = this.pistes.get(src);
     // Piste absente : plutot que de se taire pour toujours, on retente un
@@ -181,7 +211,7 @@ const audio = {
         this.enCoursDeSecours = true;
         this.precharger(src).then(() => {
           this.enCoursDeSecours = false;
-          if (this.demandee === src && this.pistes.has(src)) this.jouerMusique(src, fondu);
+          if (this.demandee === src && this.pistes.has(src) && !this.refuse(src)) this.jouerMusique(src, fondu);
         });
       }
       return;
@@ -205,6 +235,7 @@ const audio = {
   },
 
   arreterMusique(fondu) {
+    if (this.reservee !== null) return;      // voir « une piste reservee »
     this.cible = 0;
     this.enPause = false;
     this.attente = 0;

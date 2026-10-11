@@ -112,7 +112,7 @@ NIVEAUX['niveau2'] = {
   ],
 
   panneaux: [
-    { x: 4, y: 13, texte: 'La ville. Brad n\'a jamais aimé la ville.' },
+    { x: 4, y: 13, texte: 'La ville. Brad en connaît un rayon sur certaines villes.' },
     { x: 32, y: 10, texte: 'Ça monte.' },
     { x: 76, y: 10, texte: 'Échafaudage. Personne ne travaille dessus.' },
     { x: 118, y: 13, texte: 'Arrière-cour →' },

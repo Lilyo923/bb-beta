@@ -182,7 +182,7 @@ verifier('FNAM3RL est reconnu et annonce pour la sortie',
 verifier('mais il n\'est PAS enregistre', !unif.codeStocke);
 verifier('un uniforme hors beta porte par une vieille partie retombe sur le classique', unif.affiche);
 const vestTexte = await texteAffiche(
-  `reinitialiserHub(); indexVestiaire = UNIFORMES.findIndex(u => u.cle === 'dore'); scene = 'vestiaire';`);
+  `reinitialiserHub(); indexVestiaire = ordreVestiaire().findIndex(u => u.cle === 'dore'); scene = 'vestiaire';`);
 verifier('le vestiaire dit « à la sortie » pour un uniforme ferme', /Disponible à la sortie du jeu/.test(vestTexte));
 const grille = await page.evaluate(() => {
   reinitialiserHub(); scene = 'vestiaire'; rendu();

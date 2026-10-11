@@ -149,6 +149,10 @@ function lancerBandeAnnonce() {
   scene = 'bandeannonce';
 
   audio.arreterMusique(0);
+  /* La piste est RESERVEE pour toute la duree du montage : les plans de boss
+     font tourner de vraies arenes, qui lancent leur propre musique. Voir
+     `reservee` dans js/audio.js. */
+  audio.reserver(sourceMusique(BA.piste));
   audio.jouerMusiqueDifferee(sourceMusique(BA.piste), 0);
   rembobinerBA();
   appliquerPlanBA(PLANS_BA[0], 0);
@@ -171,6 +175,7 @@ function pisteBA() {
 function quitterBandeAnnonce() {
   bandeAnnonce.actif = false;
   CINEMA = false;
+  audio.liberer();                     // AVANT d'arreter : une piste reservee ne s'arrete pas
   audio.arreterMusique(0.5);
   const el = audio.pistes.get(sourceMusique(BA.piste));
   if (el) { try { el.pause(); el.currentTime = 0; } catch (e) { /* ignore */ } }
