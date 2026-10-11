@@ -1300,7 +1300,7 @@ function ecranMortFinale() {
   ctx.fillStyle = 'rgba(255,255,255,.75)';
   ctx.fillText(finale.tueur ? 'Vaincu par ' + finale.tueur + '.' : '', LARGEUR / 2, 168);
   ctx.fillText('Le portail tient encore. Espace pour recommencer le combat.', LARGEUR / 2, 194);
-  ctx.fillText('Échap pour retourner à la base.', LARGEUR / 2, 212);
+  ctx.fillText('P ou Échap pour retourner à la base.', LARGEUR / 2, 212);
   ctx.textAlign = 'left';
   zone(0, 0, LARGEUR, HAUTEUR, 'rejouer-final');
 }

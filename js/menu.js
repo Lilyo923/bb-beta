@@ -67,7 +67,29 @@ function majDemarrage(dt) {
   if (demarrage.t >= momentDuMenu()) {
     scene = 'menu';
     reinitialiserDemo();
+    jouerMusiqueMenu(1.6);
   }
+}
+
+/* LA MUSIQUE DU MENU PRINCIPAL.
+
+   Le menu etait le seul ecran du jeu sans musique : on y arrivait apres les
+   logos dans le silence, et on y revenait d'un niveau dans le silence. Il a
+   maintenant son propre morceau.
+
+   Deux regles :
+
+   - elle joue sur le menu ET sur ce qui s'ouvre depuis lui (options, credits,
+     choix de difficulte, avertissement de la beta, conditions) : ce sont des
+     pages du menu, pas d'autres lieux ;
+   - elle s'efface des qu'on part vraiment — la cinematique d'introduction, un
+     niveau, la base, la bande-annonce ont chacun leur son, et le demandent
+     eux-memes. Rien a couper ici.
+
+   Les options ouvertes depuis la PAUSE gardent la musique du niveau : on n'y
+   passe pas par `retourAuMenu`. */
+function jouerMusiqueMenu(fondu) {
+  audio.jouerMusiqueDifferee(sourceMusique(PISTE_MENU), fondu === undefined ? 1.2 : fondu);
 }
 
 /* -----------------------------------------------------------------------------
@@ -545,6 +567,9 @@ function menuValider() {
     // passee. Si l'intro n'a jamais ete finie, on la relance.
     // Sept secondes de chargement : basculer du menu a la base en une image
     // donne l'impression d'un saut, et le joueur arrive sans se situer.
+    // La musique du menu s'efface pendant le chargement : la base (ou le
+    // niveau) fera entendre la sienne en arrivant, sans coupure seche.
+    audio.arreterMusique(1.6);
     if (partie.termines.length === 0) lancerChargement(() => preparerNiveau('intro'));
     else lancerChargement(() => entrerHub(hub.premiereVisite));
   } else if (e.cle === 'bande') { lancerBandeAnnonce(); }
@@ -562,9 +587,20 @@ function menuRetour() {
 /* Ecran « Commencer » avant chaque niveau. Il sert deux buts : garantir une
    interaction juste avant le lancement de la musique, et laisser le joueur
    souffler entre le menu et l'action. */
+let choixPret = 0;                 // 0 = « Commencer », 1 = le bouton de retour
+
 function preparerNiveau(id) {
   relancerNiveau(id);
+  choixPret = 0;
   scene = 'pret';
+}
+
+/* Ce que fait le second bouton de l'ecran d'avant-niveau : rentrer a la base
+   si elle existe, sinon revenir au menu. Le clavier et le clic passent par la
+   meme fonction — le bouton fait ce qu'il annonce, quel que soit le doigt. */
+function quitterPret() {
+  if (partie.termines.length > 0) rentrerALaBase();
+  else retourAuMenu();
 }
 
 function commencerNiveau() {
@@ -591,10 +627,12 @@ function rentrerALaBase() {
 }
 
 function retourAuMenu() {
-  audio.arreterMusique(0.6);
   scene = 'menu';
   indexMenu = 0;
   reinitialiserDemo();
+  // Ce qui jouait (niveau, base, generique, bande-annonce) cede la place au
+  // morceau du menu, qui remonte en fondu.
+  jouerMusiqueMenu(1.2);
 }
 
 /* -----------------------------------------------------------------------------
@@ -838,11 +876,19 @@ function avertissementAudio() {
 -------------------------------------------------------------------------- */
 
 let indexDifficulte = 1;
+let retourDifficulte = false;      // vrai quand « Retour » est choisi, pas « Commencer »
 
 function ouvrirChoixDifficulte() {
   indexDifficulte = DIFFICULTES.findIndex(d => d.cle === partie.difficulte);
   if (indexDifficulte < 0) indexDifficulte = 1;
+  retourDifficulte = false;
   scene = 'difficulte';
+  audio.bruit('menu');
+}
+
+function quitterChoixDifficulte() {
+  retourDifficulte = false;
+  scene = 'menu';
   audio.bruit('menu');
 }
 
@@ -935,18 +981,35 @@ function dessinerChoixDifficulte() {
     zone(x + 6, y, cw - 12, ch, 'difficulte', i);
   });
 
-  const l = 190, h = 34, x = (LARGEUR - l) / 2, y = 292;
+  /* Deux boutons, l'un sous l'autre. « Retour » n'existait pas : pour revenir
+     au menu il fallait connaitre Echap. Il se choisit avec ↑ ↓, les fleches
+     ← → restant a la difficulte. */
+  const l = 190, h = 30, x = (LARGEUR - l) / 2, y = 280;
   const survolV = souris.survol && souris.survol.action === 'difficulte-ok';
-  ctx.fillStyle = survolV ? 'rgba(232,182,44,.26)' : 'rgba(255,255,255,.07)';
+  if (survolV && souris.bouge) retourDifficulte = false;
+  const choisiV = !retourDifficulte;
+  ctx.fillStyle = choisiV ? 'rgba(232,182,44,.26)' : 'rgba(255,255,255,.07)';
   ctx.fillRect(x, y, l, h);
-  ctx.strokeStyle = 'rgba(232,182,44,.6)';
+  ctx.strokeStyle = choisiV ? '#e8b62c' : 'rgba(232,182,44,.35)';
   ctx.lineWidth = 2;
   ctx.strokeRect(x + 1, y + 1, l - 2, h - 2);
-  texteCentre('COMMENCER L\'AVENTURE', y + 22, 'bold 13px system-ui, sans-serif',
-              survolV ? '#ffe9a8' : '#e8b62c');
+  texteCentre('COMMENCER L\'AVENTURE', y + 20, 'bold 13px system-ui, sans-serif',
+              choisiV ? '#ffe9a8' : '#e8b62c');
   zone(x, y, l, h, 'difficulte-ok');
 
-  texteCentre('← → choisir · Entrée valider · Échap revenir',
+  const lr = 110, hr = 20, xr = (LARGEUR - lr) / 2, yr = y + h + 5;
+  const survolR = souris.survol && souris.survol.action === 'difficulte-retour';
+  if (survolR && souris.bouge) retourDifficulte = true;
+  ctx.fillStyle = retourDifficulte ? 'rgba(232,182,44,.2)' : 'rgba(255,255,255,.05)';
+  ctx.fillRect(xr, yr, lr, hr);
+  ctx.strokeStyle = retourDifficulte ? '#e8b62c' : 'rgba(255,255,255,.18)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(xr + .5, yr + .5, lr - 1, hr - 1);
+  texteCentre('Retour', yr + 14, (retourDifficulte ? 'bold ' : '') + '11px system-ui, sans-serif',
+              retourDifficulte ? '#ffe9a8' : 'rgba(255,255,255,.6)');
+  zone(xr, yr, lr, hr, 'difficulte-retour');
+
+  texteCentre('← → difficulté · ↑ ↓ bouton · Entrée valider',
               HAUTEUR - 8, '9px system-ui, sans-serif', 'rgba(255,255,255,.3)');
 }
 
@@ -1151,12 +1214,14 @@ function dessinerPret() {
 
   const l = 190, h = 42, x = (LARGEUR - l) / 2, y = 190;
   const survol = souris.survol && souris.survol.action === 'commencer';
-  ctx.fillStyle = survol ? 'rgba(232,182,44,.2)' : 'rgba(255,255,255,.05)';
+  if (survol && souris.bouge) choixPret = 0;
+  const choisi = choixPret === 0;
+  ctx.fillStyle = choisi ? 'rgba(232,182,44,.2)' : 'rgba(255,255,255,.05)';
   ctx.fillRect(x, y, l, h);
-  ctx.strokeStyle = survol ? '#e8b62c' : 'rgba(232,182,44,.55)';
+  ctx.strokeStyle = choisi ? '#e8b62c' : 'rgba(232,182,44,.4)';
   ctx.lineWidth = 2;
   ctx.strokeRect(x + 1, y + 1, l - 2, h - 2);
-  texteCentre('COMMENCER', y + 28, 'bold 17px system-ui, sans-serif', survol ? '#ffe9a8' : '#e8b62c');
+  texteCentre('COMMENCER', y + 28, 'bold 17px system-ui, sans-serif', choisi ? '#ffe9a8' : '#e8b62c');
   zone(x, y, l, h, 'commencer');
 
   texteCentre('← → se déplacer · Espace sauter · X frapper · C onde de choc',
@@ -1165,13 +1230,22 @@ function dessinerPret() {
   // Retour a la base si elle existe deja, sinon au menu principal.
   const versHub = partie.termines.length > 0;
   const lr = 130, xr = (LARGEUR - lr) / 2;
-  const action = versHub ? 'aller-hub' : 'menu-retour';
-  const survolR = souris.survol && souris.survol.action === action;
-  ctx.fillStyle = survolR ? 'rgba(255,255,255,.12)' : 'transparent';
+  const survolR = souris.survol && souris.survol.action === 'quitter-pret';
+  if (survolR && souris.bouge) choixPret = 1;
+  const choisiR = choixPret === 1;
+  ctx.fillStyle = choisiR ? 'rgba(232,182,44,.16)' : 'transparent';
   ctx.fillRect(xr, HAUTEUR - 44, lr, 22);
+  if (choisiR) {
+    ctx.strokeStyle = 'rgba(232,182,44,.7)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(xr + .5, HAUTEUR - 43.5, lr - 1, 21);
+  }
   texteCentre(versHub ? 'Retour à la base' : 'Menu', HAUTEUR - 29,
-              '11px system-ui, sans-serif', 'rgba(255,255,255,.45)');
-  zone(xr, HAUTEUR - 44, lr, 22, action);
+              (choisiR ? 'bold ' : '') + '11px system-ui, sans-serif',
+              choisiR ? '#ffe9a8' : 'rgba(255,255,255,.45)');
+  zone(xr, HAUTEUR - 44, lr, 22, 'quitter-pret');
+  texteCentre('↑ ↓ choisir · Entrée valider', HAUTEUR - 8,
+              '9px system-ui, sans-serif', 'rgba(255,255,255,.26)');
 }
 
 function dessinerFinNiveau() {
@@ -1274,6 +1348,9 @@ function activerZone(z) {
     case 'aller-hub':   rentrerALaBase(); break;
     case 'difficulte':    indexDifficulte = z.valeur; audio.bruit('menu'); break;
     case 'difficulte-ok': validerDifficulte(); break;
+    case 'difficulte-retour': quitterChoixDifficulte(); break;
+    case 'quitter-pret':  quitterPret(); break;
+    case 'hub-menu':      retourAuMenu(); relacherTout(); break;
     case 'parler-braddy': parlerAuBraddy(); break;
 
     // --- dialogue

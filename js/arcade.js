@@ -22,6 +22,17 @@ const ARC = {
   pasDescente: 12,
   cadenceTir: 0.34,
   ptsParBC: 100,
+  /* LE VERROU DE FIN DE PARTIE.
+
+     On tire avec Espace, et Espace valide aussi « Rejouer ». Un joueur en
+     plein tir au moment ou il perd relancait donc une partie sans l'avoir
+     voulu — et sans avoir vu son score. Or une partie coute un jeton, et il
+     n'y en a que trois par jour.
+
+     Pendant ces secondes-la, l'ecran de fin n'ecoute RIEN : ni clavier, ni
+     clic, ni doigt. Une barre se vide pour dire que c'est voulu. Ensuite il
+     faut un appui NEUF : une touche restee enfoncee ne compte pas. */
+  verrouFin: 2.5,
 };
 
 const arcade = {
@@ -43,16 +54,39 @@ const arcade = {
   t: 0,
   bcGagnes: 0,
   message: '',
+  verrou: 0,             // secondes pendant lesquelles l'ecran de fin n'ecoute rien
+  choix: 0,              // bouton choisi au clavier : 0 = jouer / rejouer, 1 = sortir
 };
 
 function ouvrirArcade() {
   arcade.etat = 'accueil';
   arcade.score = 0;
   arcade.bcGagnes = 0;
+  arcade.verrou = 0;
+  arcade.choix = partiesArcadeRestantes() > 0 ? 0 : 1;
   scene = 'arcade';
 }
 
+function arcadeVerrouillee() { return arcade.etat === 'fini' && arcade.verrou > 0; }
+
+/* Les deux boutons des ecrans d'accueil et de fin se choisissent aux fleches,
+   comme partout ailleurs : « Sortir » n'est plus reserve a la souris et a
+   Echap. Sans jeton, il ne reste que « Sortir ». */
+function deplacerChoixArcade() {
+  if (arcadeVerrouillee()) return;
+  arcade.choix = partiesArcadeRestantes() > 0 ? (arcade.choix ? 0 : 1) : 1;
+  audio.bruit('menu');
+}
+
+function validerChoixArcade() {
+  if (arcadeVerrouillee()) return;
+  if (arcade.choix === 1 || partiesArcadeRestantes() <= 0) fermerPoste();
+  else demarrerArcade();
+}
+
 function demarrerArcade() {
+  // Le verrou vaut pour TOUS les chemins : touche, clic, doigt.
+  if (arcadeVerrouillee()) return;
   if (partiesArcadeRestantes() <= 0) {
     audio.bruit('refus');
     braddyDit('La borne chauffe. Reviens demain, elle aura refroidi.');
@@ -102,6 +136,7 @@ function composerVague() {
 
 function majArcade(dt) {
   arcade.t += dt;
+  if (arcade.verrou > 0) arcade.verrou = Math.max(0, arcade.verrou - dt);
   if (arcade.etat !== 'jeu') return;
 
   const b = arcade.brad;
@@ -246,6 +281,10 @@ function finirArcade(raison) {
   if (arcade.score > partie.meilleurArcade) partie.meilleurArcade = arcade.score;
   enregistrerPartie();
   audio.bruit('mort');
+  arcade.verrou = ARC.verrouFin;
+  // Au sortir du verrou, « Rejouer » est choisi s'il reste un jeton — mais il
+  // faudra un appui neuf pour le valider.
+  arcade.choix = partiesArcadeRestantes() > 0 ? 0 : 1;
 }
 
 /* -----------------------------------------------------------------------------
@@ -357,11 +396,14 @@ function dessinerArcadeAccueil() {
 
   const l = 190, h = 36, x = (LARGEUR - l) / 2, y = 256;
   const dispo = restantes > 0;
+  if (!dispo) arcade.choix = 1;
   const survol = souris.survol && souris.survol.action === 'arcade-start';
+  if (survol && souris.bouge) arcade.choix = 0;
+  const choisi = dispo && arcade.choix === 0;
   ctx.fillStyle = !dispo ? 'rgba(255,255,255,.04)'
-                : (survol ? 'rgba(232,182,44,.25)' : 'rgba(255,255,255,.07)');
+                : (choisi || survol ? 'rgba(232,182,44,.25)' : 'rgba(255,255,255,.07)');
   ctx.fillRect(x, y, l, h);
-  ctx.strokeStyle = dispo ? 'rgba(232,182,44,.6)' : 'rgba(255,255,255,.15)';
+  ctx.strokeStyle = dispo ? (choisi ? '#e8b62c' : 'rgba(232,182,44,.4)') : 'rgba(255,255,255,.15)';
   ctx.lineWidth = 2;
   ctx.strokeRect(x + 1, y + 1, l - 2, h - 2);
   texteCentre(dispo ? 'INSÉRER UN JETON' : 'BORNE EN SURCHAUFFE', y + 24,
@@ -377,14 +419,23 @@ function dessinerArcadeAccueil() {
      l'aurait posee au milieu de l'ecran, a 224 px de sa zone cliquable. */
   const bx = LARGEUR - 96, by = HAUTEUR - 40, bl = 56, bh = 22;
   const survolS = souris.survol && souris.survol.action === 'fermer-poste';
-  ctx.fillStyle = survolS ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.06)';
+  if (survolS && souris.bouge) arcade.choix = 1;
+  const choisiS = arcade.choix === 1;
+  ctx.fillStyle = choisiS ? 'rgba(232,182,44,.24)'
+                : (survolS ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.06)');
   ctx.fillRect(bx, by, bl, bh);
-  ctx.strokeStyle = survolS ? 'rgba(232,182,44,.7)' : 'rgba(255,255,255,.2)';
+  ctx.strokeStyle = choisiS ? '#e8b62c' : (survolS ? 'rgba(232,182,44,.7)' : 'rgba(255,255,255,.2)');
   ctx.lineWidth = 1;
   ctx.strokeRect(bx + .5, by + .5, bl - 1, bh - 1);
-  texteCentreEn('Sortir', bx + bl / 2, by + 15, '11px system-ui, sans-serif',
-                survolS ? '#ffe9a8' : 'rgba(255,255,255,.75)');
+  texteCentreEn('Sortir', bx + bl / 2, by + 15,
+                (choisiS ? 'bold ' : '') + '11px system-ui, sans-serif',
+                choisiS || survolS ? '#ffe9a8' : 'rgba(255,255,255,.75)');
   zone(bx, by, bl, bh, 'fermer-poste');
+
+  ctx.font = '9px system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,.3)';
+  ctx.textAlign = 'left';
+  ctx.fillText('← → choisir  ·  Entrée valider', 22, HAUTEUR - 25);
 }
 
 function hudArcade() {
@@ -421,25 +472,49 @@ function dessinerArcadeFin() {
   }
 
   const restantes = partiesArcadeRestantes();
+  const verrou = arcade.verrou > 0;
   const l = 140, h = 30, y = 248;
   const boutons = [
     { nom: restantes > 0 ? 'Rejouer (' + restantes + ')' : 'Plus de jetons',
       action: restantes > 0 ? 'arcade-start' : null, x: LARGEUR / 2 - l - 8 },
     { nom: 'Sortir', action: 'fermer-poste', x: LARGEUR / 2 + 8 },
   ];
-  for (const b of boutons) {
-    const survol = b.action && souris.survol && souris.survol.action === b.action;
-    ctx.fillStyle = !b.action ? 'rgba(255,255,255,.03)'
-                  : (survol ? 'rgba(232,182,44,.22)' : 'rgba(255,255,255,.07)');
+  boutons.forEach((b, i) => {
+    /* Sous verrou, les boutons sont DESSINES mais eteints, et sans zone : on
+       voit ce qui arrive, on ne peut pas encore y toucher. */
+    const utilisable = b.action && !verrou;
+    const survol = utilisable && souris.survol && souris.survol.action === b.action;
+    if (survol && souris.bouge) arcade.choix = i;
+    const choisi = utilisable && arcade.choix === i;
+    ctx.fillStyle = !utilisable ? 'rgba(255,255,255,.03)'
+                  : (choisi || survol ? 'rgba(232,182,44,.22)' : 'rgba(255,255,255,.07)');
     ctx.fillRect(b.x, y, l, h);
-    ctx.strokeStyle = b.action ? 'rgba(232,182,44,.45)' : 'rgba(255,255,255,.12)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(b.x + .5, y + .5, l - 1, h - 1);
+    ctx.strokeStyle = !utilisable ? 'rgba(255,255,255,.12)'
+                    : (choisi ? '#e8b62c' : 'rgba(232,182,44,.4)');
+    ctx.lineWidth = choisi ? 2 : 1;
+    ctx.strokeRect(b.x + (choisi ? 1 : .5), y + (choisi ? 1 : .5),
+                   l - (choisi ? 2 : 1), h - (choisi ? 2 : 1));
     // Chaque etiquette sur SON bouton. Avec texteCentre(), les deux mots se
     // superposaient au milieu de l'ecran et aucun n'etait sur sa zone.
-    texteCentreEn(b.nom, b.x + l / 2, y + 20, '12px system-ui, sans-serif',
-                  b.action ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.25)');
-    if (b.action) zone(b.x, y, l, h, b.action);
+    texteCentreEn(b.nom, b.x + l / 2, y + 20,
+                  (choisi ? 'bold ' : '') + '12px system-ui, sans-serif',
+                  !utilisable ? 'rgba(255,255,255,.25)'
+                              : (choisi ? '#ffe9a8' : 'rgba(255,255,255,.8)'));
+    if (utilisable) zone(b.x, y, l, h, b.action);
+  });
+
+  if (verrou) {
+    // La barre se vide : le delai se VOIT, il ne passe pas pour un blocage.
+    const lb = 2 * l + 16, xb = LARGEUR / 2 - l - 8, f = arcade.verrou / ARC.verrouFin;
+    ctx.fillStyle = 'rgba(255,255,255,.1)';
+    ctx.fillRect(xb, y + h + 8, lb, 3);
+    ctx.fillStyle = '#e8b62c';
+    ctx.fillRect(xb, y + h + 8, Math.round(lb * f), 3);
+    texteCentre(estTactile ? 'Un instant…' : 'Lâche la barre d\'espace — un instant…',
+                y + h + 28, '10px system-ui, sans-serif', 'rgba(255,255,255,.55)');
+  } else {
+    texteCentre(estTactile ? 'Touche un bouton' : '← → choisir  ·  Entrée ou Espace valider',
+                y + h + 24, '10px system-ui, sans-serif', 'rgba(255,255,255,.34)');
   }
   ctx.textAlign = 'left';
 }

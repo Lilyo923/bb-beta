@@ -90,33 +90,41 @@ function lienCourriel(invite, y) {
   zone(x - 3, y - 11, wa + 6, 16, 'ecrire-studio');
 }
 
-function boutonBeta(nom, action, x, y, l, primaire) {
+/* `choisi` : le bouton est celui que le clavier a selectionne. Laisse
+   `undefined` pour un bouton seul a l'ecran, il garde alors son allure
+   d'origine. Rend vrai si la souris vient de bouger dessus — l'appelant s'en
+   sert pour lui donner la selection. */
+function boutonBeta(nom, action, x, y, l, primaire, choisi) {
   const h = 28;
   const survol = souris.survol && souris.survol.action === action;
+  const allume = choisi === undefined ? survol : choisi;
   ctx.fillStyle = primaire
-    ? (survol ? 'rgba(232,182,44,.32)' : 'rgba(232,182,44,.16)')
-    : (survol ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.06)');
+    ? (allume ? 'rgba(232,182,44,.32)' : 'rgba(232,182,44,.12)')
+    : (allume ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.05)');
   ctx.fillRect(x, y, l, h);
-  ctx.strokeStyle = primaire ? (survol ? '#ffe9a8' : '#e8b62c')
-                             : (survol ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.22)');
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x + .5, y + .5, l - 1, h - 1);
-  texteCentreEn(nom, x + l / 2, y + 18, (primaire ? 'bold ' : '') + '12px system-ui, sans-serif',
-                primaire ? '#ffe9a8' : 'rgba(255,255,255,.72)');
+  ctx.strokeStyle = primaire ? (allume ? '#ffe9a8' : 'rgba(232,182,44,.55)')
+                             : (allume ? '#e6e8f0' : 'rgba(255,255,255,.22)');
+  ctx.lineWidth = choisi ? 2 : 1;
+  ctx.strokeRect(x + (choisi ? 1 : .5), y + (choisi ? 1 : .5), l - (choisi ? 2 : 1), h - (choisi ? 2 : 1));
+  texteCentreEn(nom, x + l / 2, y + 18,
+                (primaire || choisi ? 'bold ' : '') + '12px system-ui, sans-serif',
+                primaire ? '#ffe9a8' : (allume ? '#ffffff' : 'rgba(255,255,255,.72)'));
   zone(x, y, l, h, action);
+  return !!(survol && souris.bouge);
 }
 
 /* -----------------------------------------------------------------------------
    2. L'AVERTISSEMENT DE « NOUVELLE PARTIE »
 -------------------------------------------------------------------------- */
 
-const avisBeta = { suite: null };
+const avisBeta = { suite: null, choix: 0 };   // choix : 0 = « C'est parti », 1 = « Retour »
 
 /* `suite` est ce que « Nouvelle partie » aurait fait sans la beta : demander
    s'il faut ecraser la partie, puis choisir la difficulte. L'avertissement
    s'intercale AVANT, et ne change rien a la suite. */
 function ouvrirAvisBeta(suite) {
   avisBeta.suite = suite;
+  avisBeta.choix = 0;
   scene = 'avisbeta';
   audio.bruit('menu');
 }
@@ -160,10 +168,14 @@ function dessinerAvisBeta() {
   lienCourriel('Écris-nous : ', y + 2);
 
   const l = 150, yb = 246;
-  boutonBeta('C\'est parti ▸', 'avisbeta-ok', LARGEUR / 2 - l - 6, yb, l, true);
-  boutonBeta('Retour', 'avisbeta-retour', LARGEUR / 2 + 6, yb, l, false);
+  // Les deux boutons se choisissent aux fleches : « Retour » n'est plus
+  // reserve a la souris et a Echap.
+  if (boutonBeta('C\'est parti ▸', 'avisbeta-ok', LARGEUR / 2 - l - 6, yb, l, true,
+                 avisBeta.choix === 0)) avisBeta.choix = 0;
+  if (boutonBeta('Retour', 'avisbeta-retour', LARGEUR / 2 + 6, yb, l, false,
+                 avisBeta.choix === 1)) avisBeta.choix = 1;
 
-  texteCentre('Entrée pour continuer · Échap pour revenir',
+  texteCentre('← → choisir · Entrée valider',
               296, '9.5px system-ui, sans-serif', 'rgba(255,255,255,.3)');
 }
 

@@ -612,7 +612,12 @@ function dessinerDialogue() {
      haut-droit. Le bouton HTML « ⚙ Réglages » est en position fixe dans ce
      coin, par-dessus le canvas : un clic y atterrissait sur lui et jamais sur
      « Passer ». C'est la vraie cause du bouton qui ne repondait pas. */
-  const px = bx + bw - 80, py = by - 32, pw = 78, ph = 22;
+  /* Le bouton dit sa touche. « Passer » ne repondait au clavier qu'a Echap,
+     sans que rien ne l'ecrive — et Echap, en plein ecran, ne parvient pas au
+     jeu. C'est P, et c'est marque dessus. Au doigt, pas de touche a annoncer. */
+  const libellePasser = estTactile ? 'Passer  ▸▸' : 'Passer  ▸▸  P';
+  const pw = estTactile ? 78 : 92, ph = 22;
+  const px = bx + bw - pw - 2, py = by - 32;
   const survol = souris.survol && souris.survol.action === 'passer-dialogue';
   ctx.fillStyle = survol ? 'rgba(255,255,255,.2)' : 'rgba(9,11,20,.7)';
   ctx.fillRect(px, py, pw, ph);
@@ -622,7 +627,7 @@ function dessinerDialogue() {
   ctx.font = '10px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillStyle = survol ? '#ffe9a8' : 'rgba(255,255,255,.7)';
-  ctx.fillText('Passer  ▸▸', px + pw / 2, py + 15);
+  ctx.fillText(libellePasser, px + pw / 2, py + 15);
 
   // Le compteur se pose a GAUCHE du bouton, sur la meme ligne : pose au-dessus
   // de la boite comme avant, il finissait sous « Passer ».

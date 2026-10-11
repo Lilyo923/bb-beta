@@ -1,12 +1,33 @@
-LES MUSIQUES NE SONT PAS DANS CETTE ARCHIVE.
+UNE SEULE MUSIQUE EST NOUVELLE DANS LE PROTOTYPE 26 :
 
-Elles n'ont pas change depuis le prototype 23 : si tu les as deja deposees sur
-ton depot, il n'y a rien a faire. Ce zip ne contient aucun fichier .m4a, donc
-il ne peut rien ecraser.
+    menu-principal.m4a      la musique du menu principal (3 min 53)
 
-Si tu repars de zero, ce sont les deux archives du prototype 23 :
-  brad-bitt-musiques-1-sur-2.zip
-  brad-bitt-musiques-2-sur-2.zip
+Elle est dans l'archive brad-bitt-code-26-beta.zip, a cet emplacement. Depose-la
+sur ton depot avec les autres, dans assets/audio/. Sans elle, le menu reste
+silencieux et affiche « 1 piste audio introuvable (ex. menu-principal.m4a) ».
+
+D'OU ELLE VIENT. Le fichier fourni s'appelait « Menu principal.mp3 », mais ce
+n'est pas un MP3 : c'est de l'AAC dans un conteneur M4A (un fichier .mp4
+renomme, comme tu le pensais). Il n'a PAS ete reencode — le son est exactement
+le tien, a l'octet pres. Seul le nom change :
+
+  - l'extension dit maintenant la verite (.m4a), ce que le jeu attend ;
+  - plus de majuscule ni d'espace : macOS confond les casses, Netlify non. Un
+    « Menu principal.m4a » se chargerait chez toi et renverrait 404 en ligne.
+
+Pas de version .mp3 de secours pour ce morceau : cette machine n'a pas
+d'encodeur MP3. Les musiques du jeu sont livrees en .m4a de toute façon, et
+tous les navigateurs courants lisent l'AAC — Chrome, Safari, Firefox, Edge.
+
+LES AUTRES MUSIQUES N'ONT PAS CHANGE depuis le prototype 23 : si elles sont
+deja sur ton depot, il n'y a rien a faire. L'archive ne les contient pas, donc
+elle ne peut rien ecraser.
+
+Le DOSSIER brad-bitt-code-26-beta, lui, les contient toutes, sous les noms que
+le jeu attend (intro, niveau1 … niveau10, boss3, boss6, boss9, menu, menu-…) :
+il est jouable tel quel, pour tester en local. Ce sont tes fichiers d'origine,
+recopies depuis « Jeu/assets/audio » et « mais les musiques » ; niveau10 y est
+en .mp3, tel que tu l'as fourni — le jeu se rabat dessus tout seul.
 
 Trois musiques n'ont jamais ete fournies et le jeu les attend toujours :
 mini-kirby.m4a, mega-kirby.m4a, generique.m4a. Sans elles, les mini-boss, le

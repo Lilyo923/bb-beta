@@ -176,8 +176,7 @@ function quitterBandeAnnonce() {
   if (el) { try { el.pause(); el.currentTime = 0; } catch (e) { /* ignore */ } }
   relacherTout();
   retourAuMenu();
-  // retourAuMenu() coupe la musique : le menu remet la sienne de lui-meme au
-  // premier passage de majDemo. On ne force rien ici.
+  // retourAuMenu() relance la musique du menu : rien a forcer ici.
 }
 
 // Echap ou Entree : on sort. Toute autre touche laisse le montage tranquille.

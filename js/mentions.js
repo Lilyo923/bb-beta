@@ -25,8 +25,8 @@
    ========================================================================== */
 'use strict';
 
-const VERSION_JEU = '0.25';
-const DATE_VERSION = 'septembre 2026';
+const VERSION_JEU = '0.26';
+const DATE_VERSION = 'octobre 2026';
 const CONTACT_MAIL = 'imaginestudio.hwr@gmail.com';
 
 /* La clef de premiere visite. Elle vit a part de la sauvegarde : effacer sa
@@ -321,7 +321,7 @@ const CLAVIER_LEGENDE = [
   { geste: 'X  ·  J', role: 'Frapper, lancer un objet' },
   { geste: 'C  ·  K', role: 'Brad-Shy, quand la jauge est pleine' },
   { geste: 'E', role: 'Parler, agir devant un poste de la base' },
-  { geste: 'Échap', role: 'Menu pause' },
+  { geste: 'P  ·  Échap', role: 'Menu pause, quitter la base, passer un dialogue' },
   { geste: 'R', role: 'Recommencer le niveau' },
 ];
 

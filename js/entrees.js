@@ -69,8 +69,33 @@ function auClavier(e) {
   if (TOUCHES_DEFILEMENT.includes(e.code)) e.preventDefault();
 
   const lettre = (e.key || '').toLowerCase();
-  const valider = e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter';
+  /* UNE TOUCHE TENUE NE VALIDE RIEN.
+
+     Le navigateur repete une touche gardee enfoncee, une trentaine de fois par
+     seconde. Or Espace est a la fois « sauter », « tirer » et « valider » :
+     garder le doigt dessus en changeant d'ecran validait donc le suivant sans
+     l'avoir lu — relancer une partie d'arcade en perdant, acheter le premier
+     article en entrant dans la boutique, sauter le bilan d'un niveau.
+
+     Valider demande desormais un appui NEUF. Les fleches, elles, continuent de
+     se repeter : faire defiler une liste en gardant ↓ reste voulu. */
+  const valider = !e.repeat &&
+    (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter');
   const annuler = e.code === 'Escape';
+  /* P : LA TOUCHE QUI FAIT CE QUE FAIT ECHAP, LA OU ON NE TAPE PAS DE TEXTE.
+
+     En plein ecran, le navigateur garde Echap pour lui : la premiere pression
+     quitte le plein ecran et n'arrive jamais jusqu'au jeu. Dans les panneaux,
+     « Sortir » se choisit aux fleches (voir focusSortir, js/hub.js). En jeu et
+     dans la base il n'y a pas de liste ou le ranger : P ouvre donc la pause,
+     quitte la base, et passe un dialogue. */
+  const toucheP = lettre === 'p' && !e.repeat;
+
+  // Une question posee passe avant tout le reste, quelle que soit la scene.
+  if (toucheConfirmation(e, lettre, valider, annuler)) return;
+
+  const haut = e.code === 'ArrowUp', bas = e.code === 'ArrowDown';
+  const gauche = e.code === 'ArrowLeft', droite = e.code === 'ArrowRight';
 
   switch (scene) {
     case 'accueil':
@@ -88,11 +113,6 @@ function auClavier(e) {
        selection derriere le dialogue ouvert. */
     case 'menu':
     case 'options':
-      if (confirmation) {
-        if (valider) repondreConfirmation(true);
-        else if (annuler) repondreConfirmation(false);
-        return;
-      }
       if (e.code === 'ArrowUp' || lettre === 'z' || lettre === 'w') menuDeplacer(-1);
       else if (e.code === 'ArrowDown' || lettre === 's') menuDeplacer(1);
       else if (e.code === 'ArrowLeft' || lettre === 'q') menuAjuster(-1);
@@ -121,8 +141,11 @@ function auClavier(e) {
       return;
 
     case 'avisbeta':
-      if (valider) validerAvisBeta();
-      else if (annuler) annulerAvisBeta();
+      if (gauche || droite || haut || bas || lettre === 'q' || lettre === 'd') {
+        avisBeta.choix = avisBeta.choix ? 0 : 1; audio.bruit('menu');
+      } else if (valider) {
+        if (avisBeta.choix === 1) annulerAvisBeta(); else validerAvisBeta();
+      } else if (annuler) annulerAvisBeta();
       return;
 
     case 'finbeta':
@@ -130,40 +153,37 @@ function auClavier(e) {
       return;
 
     case 'pause':
-      if (confirmation) {
-        if (valider) repondreConfirmation(true);
-        else if (annuler) repondreConfirmation(false);
-        return;
-      }
       if (e.code === 'ArrowUp' || lettre === 'z' || lettre === 'w') deplacerPause(-1);
       else if (e.code === 'ArrowDown' || lettre === 's') deplacerPause(1);
       else if (valider) validerPause();
-      else if (annuler) reprendreJeu();
+      else if (annuler || toucheP) reprendreJeu();
       return;
 
     case 'jukebox': {
       if (annuler) { fermerPoste(); return; }
       if (jukebox.onglet === 1) {
-        // Onglet code : le clavier physique tape directement dans le champ.
-        if (e.code === 'Backspace') { e.preventDefault(); effaceCode(); return; }
-        if (valider) { validerCode(); return; }
-        if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
-          jukebox.onglet = 0; audio.bruit('menu'); return;
+        /* Onglet code : le clavier physique tape directement dans le champ.
+           ↓ descend sur « Sortir », ↑ revient au champ ; taper une lettre y
+           revient aussi — on ne perd jamais un caractere. */
+        if (haut || bas) { focusSortir = bas; audio.bruit('menu'); return; }
+        if (gauche || droite) {
+          jukebox.onglet = 0; focusSortir = false; audio.bruit('menu'); return;
         }
-        if (/^[a-z0-9]$/.test(lettre)) { tapeCode(lettre.toUpperCase()); return; }
+        if (focusSortir && valider) { fermerPoste(); return; }
+        if (e.code === 'Backspace') { e.preventDefault(); focusSortir = false; effaceCode(); return; }
+        if (valider) { validerCode(); return; }
+        if (/^[a-z0-9]$/.test(lettre)) { focusSortir = false; tapeCode(lettre.toUpperCase()); return; }
         return;
       }
-      if (e.code === 'ArrowUp' || lettre === 'z' || lettre === 'w') {
-        jukebox.index = (jukebox.index - 1 + PISTES_JUKEBOX.length) % PISTES_JUKEBOX.length;
-        audio.bruit('menu');
-      } else if (e.code === 'ArrowDown' || lettre === 's') {
-        jukebox.index = (jukebox.index + 1) % PISTES_JUKEBOX.length;
-        audio.bruit('menu');
-      } else if (e.code === 'ArrowLeft' || e.code === 'ArrowRight' ||
-                 lettre === 'q' || lettre === 'd') {
-        jukebox.onglet = jukebox.onglet ? 0 : 1; audio.bruit('menu');
+      if (haut || lettre === 'z' || lettre === 'w') {
+        jukebox.index = deplacerAvecSortir(jukebox.index, -1, PISTES_JUKEBOX.length);
+      } else if (bas || lettre === 's') {
+        jukebox.index = deplacerAvecSortir(jukebox.index, 1, PISTES_JUKEBOX.length);
+      } else if (gauche || droite || lettre === 'q' || lettre === 'd') {
+        jukebox.onglet = jukebox.onglet ? 0 : 1; focusSortir = false; audio.bruit('menu');
       } else if (valider) {
-        choisirPiste(PISTES_JUKEBOX[jukebox.index].cle);
+        if (focusSortir) fermerPoste();
+        else choisirPiste(PISTES_JUKEBOX[jukebox.index].cle);
       }
       return;
     }
@@ -175,27 +195,25 @@ function auClavier(e) {
       } else if (e.code === 'ArrowRight' || lettre === 'd') {
         indexDifficulte = (indexDifficulte + 1) % DIFFICULTES.length;
         audio.bruit('menu');
-      } else if (valider) validerDifficulte();
-      else if (annuler) { scene = 'menu'; audio.bruit('menu'); }
+      } else if (haut || bas || lettre === 'z' || lettre === 'w' || lettre === 's') {
+        // Deux boutons sous les cartes : « Commencer » et « Retour ».
+        retourDifficulte = !retourDifficulte; audio.bruit('menu');
+      } else if (valider) {
+        if (retourDifficulte) quitterChoixDifficulte(); else validerDifficulte();
+      } else if (annuler) quitterChoixDifficulte();
       return;
 
     case 'dialogue':
       if (valider) avancerDialogue();
-      else if (annuler) passerDialogue();
+      else if (annuler || toucheP) passerDialogue();
       return;
 
     case 'hub': {
-      // Une confirmation ouverte prend la main sur tout le reste : sinon les
-      // touches de deplacement continueraient de faire marcher Brad derriere
-      // la question posee.
-      if (confirmation) {
-        if (valider) repondreConfirmation(true);
-        else if (annuler) repondreConfirmation(false);
-        return;
-      }
+      // (Une confirmation ouverte a deja pris la main, tout en haut : les
+      // touches de deplacement ne font pas marcher Brad derriere la question.)
       // Le hub se joue : on laisse passer les commandes de deplacement, et le
       // saut sert d'action devant un poste (majHub le consomme).
-      if (annuler) { retourAuMenu(); relacherTout(); return; }
+      if (annuler || toucheP) { retourAuMenu(); relacherTout(); return; }
       const ah = actionDe(e);
       if (!ah) return;
       if (FRONTS[ah] && !entrees[ah]) marquerFront(ah);
@@ -204,25 +222,21 @@ function auClavier(e) {
     }
 
     case 'boutique':
-      if (annuler) { confirmation ? repondreConfirmation(false) : fermerPoste(); return; }
-      if (confirmation) {
-        if (valider) repondreConfirmation(true);
-        return;
-      }
-      if (e.code === 'ArrowUp' || lettre === 'z' || lettre === 'w') {
-        indexBoutique = (indexBoutique - 1 + articlesBoutique().length) % articlesBoutique().length;
-        audio.bruit('menu');
-      } else if (e.code === 'ArrowDown' || lettre === 's') {
-        indexBoutique = (indexBoutique + 1) % articlesBoutique().length;
-        audio.bruit('menu');
-      } else if (e.code === 'ArrowLeft' || e.code === 'ArrowRight' || lettre === 'q' || lettre === 'd') {
+      if (annuler) { fermerPoste(); return; }
+      if (haut || lettre === 'z' || lettre === 'w') {
+        indexBoutique = deplacerAvecSortir(indexBoutique, -1, articlesBoutique().length);
+      } else if (bas || lettre === 's') {
+        indexBoutique = deplacerAvecSortir(indexBoutique, 1, articlesBoutique().length);
+      } else if (gauche || droite || lettre === 'q' || lettre === 'd') {
         /* La boutique a deux ou trois onglets selon que les Secrets sont
            decouverts : la bascule ne peut plus etre un simple « 1 moins ». */
         const n = ongletsBoutique().length;
-        const pas = (e.code === 'ArrowLeft' || lettre === 'q') ? -1 : 1;
+        const pas = (gauche || lettre === 'q') ? -1 : 1;
         ongletBoutique = ((ongletBoutique + pas) % n + n) % n;
-        indexBoutique = 0; audio.bruit('menu');
-      } else if (valider) acheterArticleCourant();
+        indexBoutique = 0; focusSortir = false; audio.bruit('menu');
+      } else if (valider) {
+        if (focusSortir) fermerPoste(); else acheterArticleCourant();
+      }
       return;
 
     /* Le vestiaire accepte une SAISIE DE CODE. Les lettres et les chiffres vont
@@ -236,16 +250,28 @@ function auClavier(e) {
         fermerPoste(); return;
       }
       if (e.code === 'Backspace') { e.preventDefault(); effaceCodeVestiaire(); return; }
-      if (e.code === 'ArrowLeft') {
+      if (focusSortir) {
+        /* « Sortir » est sous la grille : ↑ y remonte, a la colonne d'ou l'on
+           venait ; ↓ ne va nulle part. Une lettre repart vers le champ de
+           code, comme d'habitude. */
+        if (haut || gauche || droite) { focusSortir = false; audio.bruit('menu'); }
+        else if (valider) { if (!validerCodeVestiaire()) fermerPoste(); }
+        else if (/^[a-z0-9]$/.test(lettre)) tapeCodeVestiaire(lettre);
+        return;
+      }
+      if (gauche) {
         indexVestiaire = (indexVestiaire - 1 + UNIFORMES.length) % UNIFORMES.length;
         audio.bruit('menu');
-      } else if (e.code === 'ArrowRight') {
+      } else if (droite) {
         indexVestiaire = (indexVestiaire + 1) % UNIFORMES.length;
         audio.bruit('menu');
-      } else if (e.code === 'ArrowUp') {
+      } else if (haut) {
         indexVestiaire = Math.max(0, indexVestiaire - VESTIAIRE_COLONNES); audio.bruit('menu');
-      } else if (e.code === 'ArrowDown') {
-        indexVestiaire = Math.min(UNIFORMES.length - 1, indexVestiaire + VESTIAIRE_COLONNES);
+      } else if (bas) {
+        // Depuis la DERNIERE rangee, ↓ descend sur « Sortir ».
+        const derniereRangee = Math.floor((UNIFORMES.length - 1) / VESTIAIRE_COLONNES);
+        if (Math.floor(indexVestiaire / VESTIAIRE_COLONNES) >= derniereRangee) focusSortir = true;
+        else indexVestiaire = Math.min(UNIFORMES.length - 1, indexVestiaire + VESTIAIRE_COLONNES);
         audio.bruit('menu');
       } else if (valider) {
         // Entree valide le code s'il y en a un a valider, sinon elle habille.
@@ -257,19 +283,23 @@ function auClavier(e) {
 
     case 'carte':
       if (annuler) { fermerPoste(); return; }
-      if (e.code === 'ArrowUp' || lettre === 'z' || lettre === 'w') {
-        indexCarte = (indexCarte - 1 + ORDRE_NIVEAUX.length) % ORDRE_NIVEAUX.length;
-        audio.bruit('menu');
-      } else if (e.code === 'ArrowDown' || lettre === 's') {
-        indexCarte = (indexCarte + 1) % ORDRE_NIVEAUX.length;
-        audio.bruit('menu');
-      } else if (valider) lancerNiveauCourant();
+      if (haut || lettre === 'z' || lettre === 'w') {
+        indexCarte = deplacerAvecSortir(indexCarte, -1, ORDRE_NIVEAUX.length);
+      } else if (bas || lettre === 's') {
+        indexCarte = deplacerAvecSortir(indexCarte, 1, ORDRE_NIVEAUX.length);
+      } else if (valider) {
+        if (focusSortir) fermerPoste(); else lancerNiveauCourant();
+      }
       return;
 
     case 'arcade': {
       if (annuler) { fermerPoste(); return; }
       if (arcade.etat !== 'jeu') {
-        if (valider) demarrerArcade();
+        /* Accueil et fin de partie : deux boutons, aux fleches. Juste apres
+           un game over, l'ecran n'ecoute rien pendant ARC.verrouFin secondes
+           (voir js/arcade.js) — les deux fonctions ci-dessous le savent. */
+        if (gauche || droite || haut || bas || lettre === 'q' || lettre === 'd') deplacerChoixArcade();
+        else if (valider) validerChoixArcade();
         return;
       }
       const aa = actionDe(e);
@@ -287,7 +317,7 @@ function auClavier(e) {
        MAP_CODE : le reste du jeu ne doit pas voir passer une direction qu'il
        ne sait pas interpreter. */
     case 'final': {
-      if (annuler) {
+      if (annuler || toucheP) {
         if (finale.mort || finale.fini) { audio.arreterMusique(0.5); entrerHub(false); return; }
         ouvrirPause();
         return;
@@ -320,14 +350,28 @@ function auClavier(e) {
       if (valider || annuler) quitterBandeAnnonce();
       return;
 
+    /* Deux ecrans a deux boutons, dont le second — « Retour » — n'etait
+       atteignable qu'a la souris ou par Echap. ↑ ↓ passent de l'un a l'autre,
+       Entree valide celui qui est allume. */
     case 'pret':
-      if (valider) commencerNiveau();
-      else if (annuler) retourAuMenu();
+      if (haut || bas || lettre === 'z' || lettre === 'w' || lettre === 's') {
+        choixPret = choixPret ? 0 : 1; audio.bruit('menu');
+      } else if (valider) {
+        if (choixPret === 1) quitterPret(); else commencerNiveau();
+      } else if (annuler) retourAuMenu();
       return;
 
     case 'mort':
-      if (valider || lettre === 'x') relancerApresMort();
-      else if (annuler) { audio.arreterMusique(0.5); entrerHub(false); }
+      if ((haut || bas || lettre === 'z' || lettre === 'w' || lettre === 's') && baseAccessible()) {
+        choixMort = choixMort ? 0 : 1; audio.bruit('menu');
+      } else if (valider || (lettre === 'x' && !e.repeat)) {
+        if (choixMort === 1 && baseAccessible()) { audio.arreterMusique(0.5); entrerHub(false); }
+        else relancerApresMort();
+      } else if (annuler && baseAccessible()) {
+        // Echap ne rentre a la base que si elle existe : pendant l'introduction
+        // elle n'est pas encore montee, et le bouton n'est d'ailleurs pas offert.
+        audio.arreterMusique(0.5); entrerHub(false);
+      }
       return;
 
     case 'fin':
@@ -339,9 +383,9 @@ function auClavier(e) {
   }
 
   // --- Scene 'jeu' ---------------------------------------------------------
-  if (annuler) {
-    // Echap n'abandonne plus le niveau d'un coup : il ouvre le menu de pause,
-    // qui previent que quitter ne sauvegarde rien.
+  if (annuler || toucheP) {
+    // Echap (ou P) n'abandonne plus le niveau d'un coup : il ouvre le menu de
+    // pause, qui previent que quitter ne sauvegarde rien.
     ouvrirPause();
     return;
   }

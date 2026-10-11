@@ -2089,6 +2089,22 @@ function hudArene() {
     ctx.strokeStyle = 'rgba(255,255,255,.25)';
     ctx.lineWidth = 1;
     ctx.strokeRect(x + .5, y + .5, l - 1, 6);
+
+    /* Le rappel de la tourelle brouillee, tant que le combat dure. Le texte
+       flottant du debut ne tient qu'une seconde, et la tourelle elle-meme fait
+       quatorze pixels : sans cette ligne, un joueur qui regarde le gardien —
+       c'est-a-dire tout joueur — croirait qu'elle est tombee en panne. */
+    if (aSecret('tourelle')) {
+      const rappel = 'Tourelle brouillée par le gardien';
+      ctx.font = '9px system-ui, sans-serif';
+      const lr = ctx.measureText(rappel).width + 10;
+      ctx.fillStyle = 'rgba(9,11,20,.7)';
+      ctx.fillRect(x + l + 3 - lr, y + 12, lr, 14);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(255,138,122,.95)';
+      ctx.fillText(rappel, x + l - 2, y + 22);
+      ctx.textAlign = 'left';
+    }
   }
 
   if (arene.messageT > 0) {

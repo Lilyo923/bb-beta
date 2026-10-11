@@ -89,6 +89,7 @@ function reapparaitre(auDebut) {
   brad.chargeTiree = false;
   brad.plaquage = 0;
   brad.reposPlaquage = 0;
+  brad.regen = 0;
   reinitialiserTourelle();
   traces.length = 0;
   if (auDebut) { pointSur.x = APPARITION.x; pointSur.y = APPARITION.y; }
@@ -278,6 +279,7 @@ function majBrad(dt) {
   if (!brad.auSol) brad.hauteurMax = Math.max(brad.hauteurMax, brad.yDepartSaut - brad.y);
 
   majAttaque(dt);
+  majRegeneration(dt);
   majPointSur(dt);
   majPorte(dt);
   if (brad.y > NIVEAU_H + 120) { mortsHorsEcran++; tuerBrad('le vide'); }
@@ -358,7 +360,19 @@ function majAttaque(dt) {
   }
 
   const relache = aCharge && brad.charge > 0 && !entrees.attaque;
-  const declenche = aCharge ? relache : attaquePresseeCeTick;
+  /* UNE BOULE EN MAIN PART A L'APPUI, frappe chargee ou non.
+
+     Avec l'aptitude, le coup part au RELACHEMENT d'une charge. Or la charge ne
+     monte pas tant que Brad porte une boule (ligne plus haut) : `relache`
+     restait donc faux pour toujours, et la boule ne quittait jamais sa main.
+     Mesure sur la version 0.25 : zero lancer sur trois appuis, brefs ou longs.
+     Le bug a ete signale « avec la tourelle » ; la tourelle seule lance tres
+     bien — c'est la frappe chargee, achetee avec elle, qui bloquait.
+
+     On ne charge pas un lancer : la boule part des qu'on appuie, comme sans
+     l'aptitude. */
+  const declenche = brad.porte ? attaquePresseeCeTick
+                               : (aCharge ? relache : attaquePresseeCeTick);
 
   if (declenche && brad.recharge <= 0) {
     if (brad.porte) {
@@ -432,10 +446,30 @@ function degatsDuPlaquage() {
 /* La tourelle. Elle flotte derriere Brad et tire sur le Serra eveille le plus
    proche. Elle ne vise pas ce qui dort : sinon elle nettoie le niveau avant
    que le joueur n'arrive, et il ne reste plus rien a jouer. */
-const tourelle = { x: 0, y: 0, recharge: 0, phase: 0, active: false };
+const tourelle = { x: 0, y: 0, recharge: 0, phase: 0, active: false, brouillee: false };
 
 function reinitialiserTourelle() {
   tourelle.active = false; tourelle.recharge = 0; tourelle.phase = 0;
+  tourelle.brouillee = false;
+}
+
+/* LES GARDIENS BROUILLENT LA TOURELLE.
+
+   Une tourelle qui tire toute seule pendant un combat de boss le joue a la
+   place du joueur : elle nettoie les renforts de la phase blindee — qui SONT
+   le combat — et grignote la barre du gardien pendant qu'on esquive. Deux
+   Brad Coins secrets ne doivent pas acheter la victoire.
+
+   Dans la fiction : un gardien emet un champ qui affole son viseur. Tant que
+   le combat dure, elle suit Brad, clignote en rouge, et ne tire pas. Elle
+   repart d'elle-meme des que le gardien tombe. La boutique le dit AVANT
+   l'achat (voir SECRETS dans js/sauvegarde.js) : on ne decouvre pas une
+   restriction apres avoir paye.
+
+   Seul `arene.active` decide — la salle d'un boss deja vaincu, ou pas encore
+   reveille, laisse la tourelle tranquille. */
+function tourelleBrouillee() {
+  return typeof arene !== 'undefined' && arene.active;
 }
 
 function majTourelle(dt) {
@@ -446,6 +480,27 @@ function majTourelle(dt) {
   const viseY = brad.y - 14 + Math.sin(tourelle.phase * 2.4) * 3;
   tourelle.x += (viseX - tourelle.x) * Math.min(1, 6 * dt);
   tourelle.y += (viseY - tourelle.y) * Math.min(1, 6 * dt);
+
+  const brouillee = tourelleBrouillee();
+  if (brouillee !== tourelle.brouillee) {
+    tourelle.brouillee = brouillee;
+    // Le changement se DIT, dans les deux sens : une tourelle qui se tait sans
+    // explication passerait pour un bug.
+    texteFlottant(tourelle.x, tourelle.y - 12,
+                  brouillee ? 'tourelle brouillée' : 'tourelle rétablie',
+                  brouillee ? '#ff8a7a' : '#7ee08a');
+    audio.bruit(brouillee ? 'refus' : 'valider');
+    if (brouillee) {
+      particules(tourelle.x, tourelle.y, 6, '#ff8a7a');
+      // Ses tirs deja en vol s'eteignent avec elle : sinon le gardien
+      // encaisse un coup a l'instant meme ou il apparait.
+      for (const b of boules) if (b.tourelle) b.vie = 0;
+    }
+    // Elle repart avec un temps de rechargement complet : pas de tir gratuit
+    // a l'instant ou le gardien s'effondre.
+    tourelle.recharge = TOURELLE_CADENCE;
+  }
+  if (brouillee) return;
 
   tourelle.recharge = Math.max(0, tourelle.recharge - dt);
   if (tourelle.recharge > 0) return;
@@ -472,6 +527,41 @@ function majTourelle(dt) {
     degats: Math.max(1, Math.round(R.degatsBrad * bonusDegats() * 0.75)),
   });
   audio.bruit('coup');
+}
+
+/* -----------------------------------------------------------------------------
+   LA REGENERATION — le bonus permanent « Casse-croûte de poche »
+
+   Un point de vie rendu toutes les REGEN_PERIODE secondes, tant que la barre
+   n'est pas pleine. Deux regles la tiennent en laisse :
+
+   - ENCAISSER UN COUP REMET LE COMPTEUR A ZERO. Sans ça, elle compenserait les
+     degats au fil de l'eau et un joueur maladroit ne descendrait jamais : elle
+     recompense celui qui tient douze secondes sans se faire toucher, pas celui
+     qui attend dans un coin entre deux gifles.
+   - ELLE NE RESSUSCITE PAS. A zero point de vie, Brad est mort ; on ne
+     grignote pas depuis l'ecran de game over.
+
+   La jauge se voit : la prochaine case de vie se remplit en vert (voir hud()
+   dans js/jeu.js). Un achat a trente Brad Coins doit se constater a l'ecran.
+-------------------------------------------------------------------------- */
+
+const REGEN_PERIODE = 12;        // secondes sans coup pour regagner 1 PV
+
+function majRegeneration(dt) {
+  // Pas dans la bande-annonce : elle filme avec la partie du joueur, et un
+  // « +1 PV » qui tinte au milieu du montage n'a rien a y faire.
+  if (!aPermanent('regeneration') || brad.pv <= 0 || brad.pv >= brad.pvMax
+      || brad.scenarise > 0 || CINEMA) {
+    brad.regen = 0;
+    return;
+  }
+  brad.regen = (brad.regen || 0) + dt;
+  if (brad.regen < REGEN_PERIODE) return;
+  brad.regen = 0;
+  brad.pv = Math.min(brad.pvMax, brad.pv + 1);
+  audio.bruit('soin');
+  texteFlottant(brad.x + brad.w / 2, brad.y - 16, '+1 PV', '#7ee08a', 'PV');
 }
 
 function declencherOnde() {
@@ -517,6 +607,7 @@ function blesserBrad(degats, sourceX, nomSource) {
   // La difficulte agit sur les degats subis, comme le prevoient les notes.
   degats = Math.max(1, Math.round(degats * reglageDifficulte().degats));
   brad.pv -= degats;
+  brad.regen = 0;                // un coup encaisse : la regeneration repart de zero
   brad.invincible = R.invincibilite;
   audio.bruit('degat');
   const sens = Math.sign(brad.x + brad.w / 2 - sourceX) || 1;
@@ -554,6 +645,7 @@ const CONSEILS = {
    | 'jeu' | 'mort' | 'fin' */
 let scene = 'accueil';
 let tueur = '';
+let choixMort = 0;               // ecran de mort : 0 = reessayer, 1 = retour a la base
 
 function tuerBrad(nomSource) {
   if (scene !== 'jeu') return;
@@ -569,6 +661,7 @@ function tuerBrad(nomSource) {
   }
   brad.pv = 0;
   scene = 'mort';
+  choixMort = 0;
   tueur = nomSource;
   mortsConsecutives++;
   secousse(8, 0.4);

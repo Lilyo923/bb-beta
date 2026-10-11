@@ -33,11 +33,12 @@ const PISTES_JUKEBOX = [
   },
   {
     cle: 'menu-CORE', fichier: 'menu-core', nom: 'CORE', code: 'CORE',
-    detail: 'Plus dense, plus sombre. À écouter quand la carte commence à faire peur.',
+    // Les deux phrases qui suivent sont celles du studio (prototype 26).
+    detail: 'Un jour, ça sera sur grand écran. Enfin je l\'espère.',
   },
   {
     cle: 'menu-N2S3', fichier: 'menu-n2s3', nom: 'N2S3', code: 'N2S3',
-    detail: 'Le morceau le plus long de la borne. Le BRADDY3000 dit qu\'il « raconte quelque chose ».',
+    detail: 'Musique présente lors de la (tentative) de capture de Kirby 67 sur Lille.',
   },
 ];
 
@@ -206,8 +207,8 @@ function dessinerJukebox() {
   ctx.font = '9px system-ui, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,.3)';
   ctx.fillText(jukebox.onglet === 0
-    ? 'Flèches choisir  ·  Entrée écouter  ·  ← → onglet  ·  Échap sortir'
-    : 'Tape le code au clavier ou touche les lettres  ·  Entrée valider  ·  Échap sortir',
+    ? '↑ ↓ choisir  ·  Entrée écouter  ·  ← → onglet  ·  « Sortir » : tout en bas de la liste'
+    : 'Tape le code  ·  Entrée valider  ·  ← → onglet  ·  ↓ pour « Sortir »',
     56, JB_AIDE_Y);
 
   /* Le credit de la compositrice, cliquable. Les musiques sont a elle : son nom
@@ -274,11 +275,13 @@ function dessinerListePistes() {
   let y = JB_LISTE_Y0;
 
   liste.forEach((p, i) => {
-    const actif = i === jukebox.index;
     const ouverte = pisteDebloquee(p);
     const jouee = partie.piste === p.cle && ouverte;
     const survol = souris.survol && souris.survol.action === 'piste' && souris.survol.valeur === i;
-    if (survol && souris.bouge && i !== jukebox.index) jukebox.index = i;
+    if (survol && souris.bouge && (i !== jukebox.index || focusSortir)) {
+      jukebox.index = i; focusSortir = false;
+    }
+    const actif = i === jukebox.index && !focusSortir;
 
     ctx.fillStyle = actif ? 'rgba(232,182,44,.14)' : 'rgba(255,255,255,.03)';
     ctx.fillRect(56, y - 12, LARGEUR - 112, hLigne);
@@ -342,10 +345,12 @@ function dessinerSaisieCode() {
   const l = 220, x = (LARGEUR - l) / 2, y = 122;
   ctx.fillStyle = 'rgba(0,0,0,.4)';
   ctx.fillRect(x, y, l, 30);
-  ctx.strokeStyle = 'rgba(232,182,44,.5)';
+  ctx.strokeStyle = focusSortir ? 'rgba(255,255,255,.18)' : 'rgba(232,182,44,.5)';
   ctx.lineWidth = 1;
   ctx.strokeRect(x + .5, y + .5, l - 1, 29);
-  const curseur = Math.sin(hub.t * 5) > 0 ? '_' : ' ';
+  // Le curseur ne clignote que si le champ a la main : quand « Sortir » est
+  // choisi, il s'efface — sinon on croirait taper dans le champ.
+  const curseur = !focusSortir && Math.sin(hub.t * 5) > 0 ? '_' : ' ';
   texteCentreEn((jukebox.saisie || '') + curseur, x + l / 2, y + 21,
                 'bold 16px monospace, monospace', '#ffe9a8');
 

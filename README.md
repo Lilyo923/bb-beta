@@ -18,7 +18,8 @@ Déployable tel quel sur Netlify (racine du dépôt, pas de commande de build).
 | Courir | Maj |
 | Frapper / lancer la boule | X · J |
 | Onde de choc (Brad-Shy plein) | C · K |
-| Menus | ↑ ↓ pour choisir, ← → pour régler, Entrée, Échap |
+| Menus | ↑ ↓ pour choisir, ← → pour régler, Entrée — « Sortir » est le dernier choix de chaque liste |
+| Pause · quitter la base · passer un dialogue | P · Échap |
 | Retour au début du niveau | R |
 | Panneau de développement | F1 |
 
@@ -3487,3 +3488,358 @@ lignes d'un paragraphe avec « | », si bien que « la version » / « finale »
 se relisait plus comme « la version finale ».
 
 Version du jeu : **0.25 bêta**.
+
+---
+
+# Prototype 26 — les retours de la bêta, avant le public
+
+Une passe de corrections, à partir de ta propre partie : six bugs, un bonus, une
+musique, un skin réparé, deux équilibrages — et trois défauts que personne
+n'avait signalés, trouvés en vérifiant le reste.
+
+**Le point de départ est le prototype 25, pas le 20.** Tu m'avais indiqué la
+version 20 en me demandant de vérifier : le dossier `bradbitt beta` (21
+septembre) est identique fichier pour fichier à l'archive
+`brad-bitt-code-25-beta.zip`, et c'est le seul à contenir le skin Bêta-testeur.
+La 20 date du 12 septembre. Je n'ai touché ni à l'un ni à l'autre : cette
+version vit dans son propre dossier, `brad-bitt-code-26-beta`.
+
+## 1. Échap, en plein écran, n'arrive pas jusqu'au jeu
+
+C'était la racine de ton premier bug. En plein écran, le navigateur garde Échap
+pour lui : la première pression quitte le plein écran, et le jeu ne l'entend
+même pas. Or Échap était la **seule** façon de dire « non » ou « retour » au
+clavier, à peu près partout.
+
+Trois réponses, parce qu'il y avait trois situations.
+
+**La confirmation d'achat se choisit aux flèches.** Avant : Entrée valait
+« oui », Échap valait « non », rien d'autre — pas de sélection visible, pas de
+flèches. Les deux réponses sont maintenant deux boutons dont l'un est allumé ;
+← → passent de l'un à l'autre, Entrée valide **celui-là**. La même boîte sert à
+la boutique, à « Nouvelle partie », à « Effacer la sauvegarde », au portail et à
+« Quitter le niveau » : les cinq en profitent. Elle prend aussi la hauteur de
+son texte — elle faisait 150 px quoi qu'il arrive, et une phrase de boutique un
+peu bavarde passait sous les boutons.
+
+**« Sortir » est le dernier choix de chaque liste.** Boutique, vestiaire, carte,
+jukebox (ses deux onglets), arcade : le bouton existait, mais la souris seule
+l'atteignait. On descend jusqu'à lui — ou on remonte depuis le premier choix —,
+il s'allume, Entrée sort. Même traitement pour les écrans à deux boutons dont le
+second était hors d'atteinte : l'écran de mort (« Retour à la base »), l'écran
+d'avant-niveau, le choix de difficulté (qui n'avait **pas** de bouton « Retour »
+du tout) et l'avertissement de la bêta.
+
+**P fait ce que faisait Échap, là où il n'y a pas de liste.** En jeu, P ouvre la
+pause. Dans la base, P renvoie au menu principal — et c'est maintenant écrit en
+haut de l'écran, cliquable ; avant, cette sortie n'existait que sous Échap, sans
+un mot. Dans un dialogue, P passe, et le bouton « Passer » porte la lettre.
+Dans un champ de saisie (codes du jukebox et du vestiaire), P reste une lettre.
+
+Échap marche toujours partout. C'est un raccourci, plus une obligation.
+
+## 2. La borne d'arcade relançait une partie toute seule
+
+On tire avec Espace ; Espace valide « Rejouer ». Perdre en plein tir relançait
+donc aussitôt, sans voir son score — et **une partie coûte un jeton, il y en a
+trois par jour**.
+
+- L'écran de fin se **verrouille 2,5 secondes** : ni touche, ni clic, ni doigt.
+  Les boutons sont dessinés mais éteints, une barre se vide, et une ligne dit
+  « Lâche la barre d'espace ». Un délai qu'on ne voit pas passe pour un blocage.
+- Ensuite il faut un appui **neuf**. Une touche restée enfoncée ne compte pas,
+  même une fois le verrou tombé.
+- Les deux boutons se choisissent aux flèches ; sans jeton, « Sortir » est
+  choisi d'office.
+
+**Ce que ça a révélé.** Le problème n'était pas propre à l'arcade. Le navigateur
+*répète* une touche tenue, une trentaine de fois par seconde, et le jeu prenait
+chaque répétition pour une validation. Garder Espace en entrant dans la boutique
+**achetait le premier article abordable** — question posée, question validée —
+et tenir Espace en franchissant la porte d'un niveau sautait l'écran de bilan.
+Valider demande donc un appui neuf, partout. Les flèches, elles, continuent de
+se répéter : faire défiler une liste en gardant ↓ reste voulu.
+
+## 3. On prenait le Serra de la grotte sans l'avoir vu
+
+Tu avais raison sur le symptôme, et la cause est plus large que ce Serra-là.
+
+Le changement de décor dure une seconde, dont une demie dans le noir complet —
+**et le jeu continuait de tourner derrière le fondu**. Mesuré sur la 0.25 :
+
+| | tuiles parcourues pendant le fondu | ce qui arrivait |
+|---|---|---|
+| en marchant | 4,8 | coup à 0,74 s ; le Serra est à **0,6 tuile** quand l'écran se rallume |
+| en courant | 8,2 à 10,5 | coup à 0,5 s — écran noir |
+
+Pendant ce temps la garde de la zone suivante, réveillée à mi-fondu, venait à sa
+rencontre.
+
+**Le monde retient son souffle pendant le fondu.** Brad, les ennemis, les
+plateformes, le chronomètre : tout s'arrête, vitesse et élan conservés tels
+quels. On repart exactement où l'on en était, l'écran rallumé. Brad parcourt
+maintenant **0 tuile** pendant le fondu, dans les onze niveaux — et comme la
+seconde moitié du fondu *révèle* la zone suivante à l'arrêt, on la voit une
+demi-seconde avant de reprendre la main.
+
+En plus, pour le niveau 1 : le premier Serra de la grotte recule de la tuile 124
+à la tuile 128, avec une patrouille courte. Il est à **9,4 tuiles** à la
+reprise, au lieu d'être sous les pieds.
+
+**À savoir, et à décider.** Le même schéma existe ailleurs : dans les neuf
+niveaux suivants, de 2 à 10, le premier ennemi attend 3 à 6 tuiles derrière un
+changement de décor — 4 tuiles aux niveaux 2 et 3, ceux de la bêta. Le gel
+règle le fond du problème : on ne les prend plus à l'aveugle. Mais un joueur qui
+garde → enfoncé en courant les atteint 0,4 seconde après la reprise. **Je n'ai
+déplacé que celui que tu as signalé** : reculer les autres, c'est retoucher ton
+tracé de niveau, et ça ne se fait pas sans toi.
+
+## 4. La boule de Serrano ne partait plus — et ce n'était pas la tourelle
+
+Reproduit, puis isolé en quatre configurations sur la 0.25 :
+
+| aptitudes achetées | la boule part ? |
+|---|---|
+| aucune | oui |
+| tourelle seule | **oui** |
+| frappe chargée seule | **non** — zéro lancer sur trois appuis |
+| les deux | non |
+
+C'est la **frappe chargée**. Avec elle, le coup part au *relâchement* d'une
+charge ; or la charge ne monte pas tant que Brad porte une boule. Le
+relâchement n'arrivait donc jamais, et la boule ne quittait plus sa main. Les
+deux aptitudes s'achètent ensemble, d'où l'association avec la tourelle.
+
+Une boule en main part désormais **à l'appui**, frappe chargée ou non : on ne
+charge pas un lancer. La frappe chargée, sans boule, est intacte (0,7 s tenu =
+coup chargé, appui bref = coup simple), et une boule ramassée *pendant* une
+charge n'est pas lancée par accident au relâchement.
+
+## 5. Les gardiens brouillent la tourelle
+
+Une tourelle qui tire seule pendant un combat de boss le joue à la place du
+joueur. Mesuré sur la 0.25, face au Colosse, **Brad immobile** — trois combats,
+trois fois le même résultat :
+
+- en huit secondes, six tirs et **quatre points de vie sur quatorze** ;
+- en phase blindée, elle **vide la salle toute seule en six secondes** et fait
+  tomber le blindage — alors que nettoyer la salle *est* le combat.
+
+L'excuse : un gardien émet un champ qui affole son viseur. Tant que le combat
+dure, la tourelle suit Brad, tressaute, laisse pendre son canon, clignote en
+rouge — et ne tire pas. Elle repart d'elle-même quand le gardien tombe.
+
+- **Ça se dit trois fois** : « tourelle brouillée » au-dessus d'elle à l'entrée,
+  un rappel permanent sous la barre de vie du boss, « tourelle rétablie » à la
+  fin. Une tourelle muette sans explication passerait pour un bug.
+- **La boutique prévient avant l'achat.** La fiche dit « Les gardiens la
+  brouillent », et le BRADDY3000 ajoute que « la garantie ne couvre pas les
+  boss ». On ne découvre pas une restriction après avoir payé deux Brad Coins
+  secrets.
+- Ses tirs déjà en vol s'éteignent avec elle, et elle repart avec un temps de
+  rechargement complet : pas de coup gratuit ni à l'apparition du gardien, ni à
+  sa chute.
+
+Seul le combat **en cours** la brouille. La salle d'un boss déjà vaincu, ou pas
+encore réveillé, la laisse tranquille. La règle est la même pour les quatre
+arènes du jeu ; elle est mesurée sur celle du niveau 3, la seule de la bêta.
+
+## 6. Le bonus permanent « Casse-croûte de poche » — 30 BC
+
+*Un sandwich dans la poche intérieure. Tu grignotes, tu guéris.*
+
+**+1 PV toutes les 12 secondes**, tant que la barre n'est pas pleine. Deux
+règles le tiennent en laisse :
+
+- **encaisser un coup remet le compteur à zéro.** Sans ça il compenserait les
+  dégâts au fil de l'eau ; il récompense celui qui tient douze secondes sans se
+  faire toucher, pas celui qui attend dans un coin entre deux gifles ;
+- **il ne ressuscite pas.**
+
+Il se **voit** : la prochaine case de vie se remplit en vert, de bas en haut. Un
+achat à trente Brad Coins invisible onze secondes sur douze n'existerait pas
+pour le joueur. Le rythme tient dans une constante, `REGEN_PERIODE`
+(`js/acteurs.js`), et le texte de la boutique la *relit* : changer le chiffre
+change la fiche.
+
+La liste des bonus permanents passait à cinq lignes et descendait sur la ligne
+d'aide : la hauteur d'une rangée se déduit maintenant du nombre d'articles,
+comme au jukebox.
+
+*Le nom et la phrase sont de moi : dis-moi si tu en veux d'autres.*
+
+## 7. La musique du menu principal
+
+Le menu était le seul écran du jeu sans musique. Il a la sienne, qui joue aussi
+sur ce qui s'ouvre depuis lui (options, crédits, difficulté, avertissement,
+conditions), et cède la place dès qu'on part vraiment. Les options ouvertes
+depuis la **pause** gardent la musique du niveau.
+
+**Le fichier.** « Menu principal.mp3 » n'était pas un MP3, tu l'avais deviné :
+c'est de l'AAC dans un conteneur M4A. Il n'a **pas** été réencodé —
+`assets/audio/menu-principal.m4a` est identique au tien à l'octet près, seul le
+nom change. Sans majuscule ni espace, pour la même raison que les trois
+morceaux à code du prototype 10 : macOS confond les casses, Netlify non.
+
+Pas de `.mp3` de secours : cette machine n'a pas d'encodeur MP3.
+
+## 8. Le skin Bêta-testeur n'a plus de taches noires
+
+Le costume d'origine est noir, dessiné en trois valeurs : l'étoffe, son
+**ombre** (plis, creux du bras, jambe du fond) et les **traits** du dessin. Sur
+du noir, l'ombre et les traits ne se voient presque pas. Le script ne
+repeignait que l'étoffe : sur une veste rose et un gilet turquoise, le reste
+est devenu des taches — deux équerres au milieu du gilet, un pâté à
+l'entrejambe, un bloc dans le pli du bras à la course. Et la jambe du fond,
+peinte d'un turquoise presque bleu nuit, se lisait comme une grande tache à
+chaque pas.
+
+**Une ombre a la couleur de ce qu'elle ombre.** Un pixel sombre à l'intérieur du
+personnage devient un ton foncé de l'étoffe qui l'entoure, de proche en proche
+depuis ce qui est déjà peint. Seuls restent noirs le contour — tout pixel
+sombre à deux pixels ou moins du vide — et les chaussures.
+
+| | pixels quasi noirs à l'intérieur du corps | pixels « bleu nuit » |
+|---|---|---|
+| planche 0.25 | **672**, dans les douze images | 675 |
+| planche 0.26 | **0** | 0 |
+
+La tête, le cou et les chaussures sont ceux de Brad au pixel près (0 écart). La
+bande rose du pantalon, qui se posait au milieu des jambes dans les images de
+marche, est revenue sur le côté extérieur. `tools/beta_brad.py` se termine par
+ce compte et n'a plus besoin de numpy.
+
+## 9. Deux réglages et deux phrases
+
+- **Cravate verte** : cinq niveaux terminés, plus deux. Elle tombait une heure
+  après la bleue. Le compteur est celui des niveaux *différents* terminés —
+  rejouer le même ne compte pas, comme pour la bleue. En bêta elle reste « à la
+  sortie » : quatre niveaux y sont ouverts.
+- **Jukebox**, tes deux phrases : CORE — « Un jour, ça sera sur grand écran.
+  Enfin je l'espère. » ; N2S3 — « Musique présente lors de la (tentative) de
+  capture de Kirby 67 sur Lille. » J'ai écrit « Kirby 67 » avec l'espace, comme
+  partout ailleurs dans le jeu.
+
+## 10. Trois défauts que personne n'avait signalés
+
+Trouvés en vérifiant le reste.
+
+**Un ralentissement se rattrapait en accéléré.** La boucle simule au plus huit
+pas par image, mais ce qu'elle n'avait pas eu le temps de simuler *restait en
+réserve* et s'empilait. Dans un onglet ralenti à deux images par seconde :
+3,7 secondes de retard accumulées en dix secondes. Dès que l'affichage
+redevenait fluide, le jeu les dépensait à **quatre fois la vitesse normale** —
+la seconde suivante durait quatre secondes de jeu. Le retard est maintenant
+perdu : le jeu ralentit tant que la machine peine, et reprend à vitesse normale.
+*Je l'ai trouvé parce que mes propres mesures étaient incohérentes — treize
+tirs de tourelle en six secondes.*
+
+**Une touche tenue validait l'écran suivant.** Voir le point 2.
+
+**Pendant l'introduction, Échap sur l'écran de mort menait à la base** — qui
+n'existe pas encore à ce moment-là. Le bouton n'était pas offert, mais la
+touche passait. Le prototype 8 avait fermé cette porte ; celle-ci était restée
+entrouverte.
+
+## Ce que je n'ai pas fait, et qu'il faut savoir
+
+- **Les suites `verif.mjs` et `verif-beta.mjs` n'ont pas été rejouées.** Elles
+  ont besoin de Node et de Playwright ; il n'y en a pas sur cette machine, et
+  leur socle pointe vers des chemins d'un conteneur qui n'existe plus. Je les
+  ai relues : aucune de leurs vérifications ne porte sur ce qui a changé ici —
+  le test de la tourelle se joue au niveau 1, hors arène. Mais « relues » n'est
+  pas « passées », et je ne l'écris pas autrement.
+- **Aucun essai sur téléphone ni à la manette.** Le verrou de l'arcade et les
+  boutons sont câblés pour le doigt, pas essayés au doigt. La manette hérite du
+  clavier ; elle est fermée en bêta de toute façon.
+- **Le plein écran lui-même n'a pas été essayé.** Le navigateur de test ne s'y
+  prête pas. Ce qui est vérifié, c'est que chaque écran se quitte sans Échap.
+- **Le générique** avance au temps du jeu, pas à celui de la musique : après un
+  gros ralentissement il ne rattrape plus sa piste (avant, il la rattrapait en
+  accéléré). Version finale seulement, et la piste n'existe pas encore.
+
+## Vérification
+
+Une suite neuve, `tools/verif-26.js`, qui tourne **dans la page du jeu** : rien
+à installer.
+
+```
+python3 tools/serveur.py                     édition bêta     118 vérifications
+python3 tools/serveur.py --edition finale    édition finale   139 vérifications
+```
+
+puis, dans la console du navigateur :
+
+```js
+var s = document.createElement('script'); s.src = 'tools/verif-26.js'; document.head.appendChild(s);
+```
+
+`tools/serveur.py` remplace le socle Node pour servir le jeu : il ne demande
+que le Python de macOS, et bascule l'édition à la volée comme l'ancien, sans
+toucher au fichier.
+
+**0 échec sur quatre exécutions consécutives de chacune.**
+
+```
+                                                        bêta   finale
+A. CHARGEMENT ........................................     4       4
+B. LA MUSIQUE DU MENU PRINCIPAL ......................     9       9
+C. LA BOULE DE SERRANO ET LA FRAPPE CHARGÉE ..........     7       7
+D. LE CHANGEMENT DE DÉCOR ............................    10      24
+E. LA BORNE D'ARCADE .................................    13      13
+F. LA CONFIRMATION D'ACHAT, AUX FLÈCHES ..............     9       9
+G. « SORTIR » AU CLAVIER .............................    16      15
+H. LA TOUCHE P .......................................     7       7
+I. LE BONUS DE RÉGÉNÉRATION ..........................     9       9
+J. LA TOURELLE, BROUILLÉE ............................     8       8
+K. LA CRAVATE VERTE ..................................     4       5
+L. LES DEUX PHRASES DU JUKEBOX .......................     4       4
+M. LE SKIN BÊTA-TESTEUR ..............................     5       5
+N. UN RALENTISSEMENT NE SE RATTRAPE PLUS .............     4       4
+O. BALAYAGE : NIVEAUX ET ÉCRANS ......................     6      13
+P. EN SORTANT ........................................     3       3
+```
+
+Le balayage (O) lâche un robot 25 secondes dans chaque niveau de l'édition,
+toutes aptitudes achetées, puis ouvre et referme chaque écran : aucun incident
+d'image, dans les douze niveaux et les seize écrans de l'édition finale.
+
+**Elle sait échouer.** Une suite verte du premier coup ne prouve rien tant
+qu'on ne l'a pas vue rouge. Lancée contre le prototype 25, elle échoue sur
+**53 vérifications** et en passe 37 : les bugs y sont encore — la boule bloquée
+par la frappe chargée, huit à dix tuiles pendant le fondu, l'achat à touche
+tenue, 672 pixels sur le skin, la seconde qui en dure quatre — et les ajouts
+n'y existent pas. Elle s'y arrête d'ailleurs avant son bilan : elle cherche des
+variables que la 25 n'a pas.
+
+**Trois fois, c'est elle qui avait tort**, et pas le jeu :
+
+1. Un test posait Brad au-dessus d'un trou, un autre dans un bloc de décor — où
+   les tirs de la tourelle s'éteignaient aussitôt. Elle pose maintenant Brad sur
+   la première surface libre, et le vérifie.
+2. Elle attendait l'horloge du navigateur. Un onglet en arrière-plan tombe à
+   deux images par seconde : « six secondes » n'en étaient plus. Elle fait
+   désormais avancer le jeu image par image, sans horloge — c'est aussi ce qui
+   la fait tenir en deux secondes.
+3. Un échec au niveau 5, à la première exécution en édition finale : la mesure
+   comptait parfois le premier pas de simulation *après* la fin du fondu. Deux
+   pixels. La tolérance vaut maintenant un pas, contre huit à dix tuiles avant
+   correction.
+
+Elle joue avec la partie du navigateur : elle la sauvegarde en entrant et la
+remet en sortant, récompenses comprises — et le vérifie.
+
+## Pour déployer
+
+L'archive `brad-bitt-code-26-beta.zip` se dépose par-dessus le dépôt, comme les
+précédentes. Elle contient **une** musique, la nouvelle :
+`assets/audio/menu-principal.m4a`. Les autres n'ont pas changé.
+
+La planche `assets/brad/brad-beta-testeur.png` est remplacée : même nom, même
+taille. Un joueur qui a déjà gagné le skin le verra corrigé sans rien faire.
+
+Aucune clef nouvelle dans le navigateur : les conditions d'utilisation n'ont
+pas à changer. Une partie de la 0.25 se relit telle quelle.
+
+Version du jeu : **0.26 bêta**.
+

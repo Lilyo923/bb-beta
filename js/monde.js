@@ -156,6 +156,12 @@ const EXT_AUDIO = (() => {
 
 function sourceMusique(base) { return 'assets/audio/' + base + EXT_AUDIO; }
 
+/* La musique du menu principal (prototype 26). Un nom de fichier tout en
+   minuscules et sans espace, comme les autres : macOS confond les casses,
+   Netlify non — « Menu principal.m4a » se chargerait en local et renverrait
+   404 une fois en ligne. */
+const PISTE_MENU = 'menu-principal';
+
 /* -----------------------------------------------------------------------------
    3. IMAGES
    Metadonnees en dur (pas de fetch de JSON) ; assets/brad/brad.json en garde
@@ -241,6 +247,9 @@ function precharger(surProgres) {
      retard, c'est un montage qui demarre au milieu d'une mesure. Elle ne pese
      que 1,2 Mo — un vingtieme de ce qui est deja charge. */
   taches.push(audio.precharger(sourceMusique('bande-annonce')));
+  /* Celle du menu aussi : c'est la premiere chose qu'on entend, et elle doit
+     partir a l'instant ou le menu s'ouvre, pas trois secondes apres. */
+  taches.push(audio.precharger(sourceMusique(PISTE_MENU)));
 
   let faits = 0;
   const total = taches.length;

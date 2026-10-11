@@ -106,7 +106,13 @@ NIVEAUX['niveau1'] = {
     { type: 'Serra-Lourd', x: 114, y: 15, rayon: 2 },
 
     // ---- ZONE 2 ------------------------------------------------------------
-    { type: 'Serra', x: 124, y: 15 },
+    /* Le premier Serra de la grotte attendait a la tuile 124, cinq tuiles
+       derriere l'entree : on le prenait de face en sortant du fondu. Le jeu
+       se fige maintenant pendant le fondu (voir imageDuJeu, js/jeu.js), ce
+       qui regle le fond du probleme dans tous les niveaux ; ici on lui donne
+       en plus neuf tuiles de recul et une patrouille courte, pour que
+       l'entree de la grotte soit une arrivee et pas une embuscade. */
+    { type: 'Serra', x: 128, y: 15, rayon: 2 },
     { type: 'Serra', x: 131, y: 15 },
     { type: 'Serra-Volant', x: 134, y: 12, rayon: 2.5 },
     { type: 'Serra-Boost', x: 143, y: 15, rayon: 4 },

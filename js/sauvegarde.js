@@ -55,7 +55,8 @@ const AMELIORATIONS = [
 ];
 
 /* Bonus permanents : achetes une seule fois. 10 BC pour le confort, 20 BC
-   pour ceux qui changent vraiment la donne. */
+   pour ceux qui changent vraiment la donne, 30 BC pour la regeneration — le
+   seul qui rende de la vie, donc le seul au prix d'une amelioration. */
 const PERMANENTS = [
   { cle: 'aimant', nom: 'Aimant à BC', cout: 10,
     detail: 'Les Brad Coins sont attirés de deux fois plus loin.',
@@ -69,6 +70,15 @@ const PERMANENTS = [
   { cle: 'shy', nom: 'Brad-Shy affûté', cout: 20,
     detail: 'La jauge de Brad-Shy se remplit 30 % plus vite.',
     phrase: 'L\'onde de choc revient plus souvent.' },
+  /* La regeneration (prototype 26). Le rythme vit dans REGEN_PERIODE,
+     js/acteurs.js : le texte ci-dessous le relit, il ne le recopie pas. */
+  { cle: 'regeneration', nom: 'Casse-croûte de poche', cout: 30,
+    get detail() {
+      return 'La vie se régénère : +1 PV toutes les ' + REGEN_PERIODE
+           + ' secondes sans prendre de coup.';
+    },
+    phrase: 'Un sandwich dans la poche intérieure. Tu grignotes, tu guéris. '
+          + 'Ne me demande pas ce qu\'il y a dedans.' },
 ];
 
 /* -----------------------------------------------------------------------------
@@ -83,8 +93,11 @@ const UNIFORMES = [
     detail: 'Costard noir, cravate rouge. Depuis toujours.' },
   { cle: 'classique-bleu', nom: 'Cravate bleue', condition: 'niveaux>=1',
     detail: 'Débloqué en terminant un niveau.' },
-  { cle: 'classique-vert', nom: 'Cravate verte', condition: 'niveaux>=2',
-    detail: 'Débloqué en terminant deux niveaux.' },
+  /* Deux niveaux, c'etait l'introduction et le premier : la cravate verte
+     tombait une heure apres la bleue. Elle demande maintenant cinq niveaux
+     termines (prototype 26, a la demande du studio). */
+  { cle: 'classique-vert', nom: 'Cravate verte', condition: 'niveaux>=5',
+    detail: 'Débloqué en terminant cinq niveaux.' },
   { cle: 'classique-orange', nom: 'Cravate orange', condition: 'ennemis>=50',
     detail: 'Débloqué en éliminant 50 ennemis.' },
   /* 300 points ne demandaient qu'une vague et demie : le seuil est passe a
@@ -307,8 +320,13 @@ const SECRETS = [
   },
   {
     cle: 'tourelle', nom: 'Tourelle anti-serrano', cout: 2,
-    detail: 'Une tourelle te suit et tire toute seule sur ce qui approche.',
-    phrase: 'Elle ne parle pas, elle ne se plaint pas, elle vise mieux que toi. Ne le prends pas mal.',
+    /* La restriction est ecrite ICI, dans la boutique : les gardiens la
+       brouillent (voir tourelleBrouillee, js/acteurs.js), et celui qui paie
+       deux Brad Coins secrets doit le savoir avant, pas le decouvrir devant
+       le Colosse. */
+    detail: 'Elle te suit et tire toute seule sur ce qui approche. Les gardiens la brouillent.',
+    phrase: 'Elle vise mieux que toi, ne le prends pas mal. Un détail : face à un gardien, '
+          + 'son viseur s\'affole. La garantie ne couvre pas les boss.',
   },
 ];
 

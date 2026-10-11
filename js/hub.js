@@ -217,7 +217,7 @@ function majHub(dt) {
 function ouvrirPoste(cle) {
   audio.bruit('valider');
   indexBoutique = 0; ongletBoutique = 0; confirmation = null;
-  indexVestiaire = 0; indexCarte = 0;
+  indexVestiaire = 0; indexCarte = 0; focusSortir = false;
   if (cle === 'arcade') { ouvrirArcade(); return; }
   if (cle === 'jukebox') { ouvrirJukebox(); return; }
   if (cle === 'portail') { ouvrirPortailFinal(); return; }
@@ -234,6 +234,7 @@ function ouvrirPoste(cle) {
 function fermerPoste() {
   audio.bruit('menu');
   confirmation = null;
+  focusSortir = false;
   scene = 'hub';
 }
 
@@ -684,6 +685,18 @@ function hudHub(c) {
   ctx.fillStyle = 'rgba(255,255,255,.5)';
   ctx.fillText('LA BASE', 92, 17);
 
+  /* La sortie vers le menu principal, ECRITE. Elle n'existait que sous Echap,
+     sans un mot a l'ecran — et Echap, en plein ecran, ne parvient pas au jeu.
+     P fait la meme chose, et le libelle se touche. */
+  if (scene === 'hub' && !confirmation) {
+    const t = estTactile ? 'Menu principal' : 'P · Menu principal';
+    const lt = ctx.measureText(t).width;
+    const survolM = souris.survol && souris.survol.action === 'hub-menu';
+    ctx.fillStyle = survolM ? '#ffe9a8' : 'rgba(255,255,255,.34)';
+    ctx.fillText(t, 150, 17);
+    zone(146, 4, lt + 8, 19, 'hub-menu');
+  }
+
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(255,255,255,.45)';
   ctx.fillText(partie.termines.length + ' / ' + ORDRE_NIVEAUX.length + ' niveaux', LARGEUR - 12, 17);
@@ -709,7 +722,37 @@ function hudHub(c) {
    3. PANNEAUX — cadre commun
 -------------------------------------------------------------------------- */
 
-let confirmation = null;         // { texte, oui, non }
+let confirmation = null;         // { texte, oui, choix } — choix : 0 = oui, 1 = non
+
+/* -----------------------------------------------------------------------------
+   « SORTIR » SE CHOISIT AUX FLECHES
+
+   Chaque panneau de la base avait bien un bouton « Sortir », mais la souris
+   seule pouvait l'atteindre : au clavier il ne restait qu'Echap. Or en plein
+   ecran, le navigateur garde Echap pour lui — il quitte le plein ecran avant
+   meme que le jeu n'entende la touche. Un joueur au clavier se retrouvait donc
+   a sortir du plein ecran pour sortir de la boutique.
+
+   Le bouton devient le DERNIER CHOIX de chaque liste : on descend jusqu'a lui
+   (ou on remonte depuis le premier), il s'allume, Entree sort. Echap marche
+   toujours — c'est un raccourci, plus une obligation.
+
+   Un seul drapeau pour les quatre panneaux : il n'y en a jamais qu'un d'ouvert.
+-------------------------------------------------------------------------- */
+let focusSortir = false;
+
+/* Deplace la selection d'une liste verticale de `n` entrees, « Sortir » compris
+   comme n-ieme cran. Rend le nouvel index ; `focusSortir` est mis a jour. */
+function deplacerAvecSortir(index, pas, n) {
+  audio.bruit('menu');
+  if (focusSortir) {
+    focusSortir = false;
+    return pas > 0 ? 0 : n - 1;
+  }
+  const suivant = index + pas;
+  if (suivant < 0 || suivant >= n) { focusSortir = true; return index; }
+  return suivant;
+}
 
 function cadrePanneau(titre, sousTitre) {
   ctx.fillStyle = 'rgba(9,11,20,.9)';
@@ -736,16 +779,27 @@ function cadrePanneau(titre, sousTitre) {
   ctx.fillText(partie.pieces + ' BC', LARGEUR - 56, 48);
   ctx.textAlign = 'left';
 
-  // Bouton fermer
+  boutonSortir(LARGEUR - 96, HAUTEUR - 48);
+}
+
+/* Le bouton « Sortir », avec ses trois etats : au repos, survole a la souris,
+   choisi au clavier. Le dernier doit se voir autant qu'une ligne de liste
+   selectionnee — meme ambre, meme filet — sinon on ne sait pas ou l'on est. */
+function boutonSortir(x, y) {
+  const l = 56, h = 22;
   const survol = souris.survol && souris.survol.action === 'fermer-poste';
-  ctx.fillStyle = survol ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.06)';
-  ctx.fillRect(LARGEUR - 96, HAUTEUR - 48, 56, 22);
-  ctx.font = '11px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(255,255,255,.7)';
-  ctx.fillText('Sortir', LARGEUR - 68, HAUTEUR - 33);
-  ctx.textAlign = 'left';
-  zone(LARGEUR - 96, HAUTEUR - 48, 56, 22, 'fermer-poste');
+  ctx.fillStyle = focusSortir ? 'rgba(232,182,44,.24)'
+                : (survol ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.06)');
+  ctx.fillRect(x, y, l, h);
+  if (focusSortir || survol) {
+    ctx.strokeStyle = focusSortir ? ACCENT : 'rgba(232,182,44,.7)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + .5, y + .5, l - 1, h - 1);
+  }
+  texteCentreEn('Sortir', x + l / 2, y + 15,
+                (focusSortir ? 'bold ' : '') + '11px system-ui, sans-serif',
+                focusSortir ? '#ffe9a8' : 'rgba(255,255,255,.7)');
+  zone(x, y, l, h, 'fermer-poste');
 }
 
 /* La confirmation d'achat demandee dans les notes : le BRADDY3000 s'assure
@@ -760,7 +814,14 @@ function dessinerConfirmation() {
      rachetait un article ou relancait un niveau. */
   zone(0, 0, LARGEUR, HAUTEUR, 'confirmer-fond');
 
-  const w = 400, h = 150, x = (LARGEUR - w) / 2, y = (HAUTEUR - h) / 2;
+  /* La boite prend la hauteur de son texte. Elle faisait 150 px quoi qu'il
+     arrive : quatre lignes y tenaient, la cinquieme passait sous les boutons —
+     et une phrase de boutique un peu bavarde suffit a en faire cinq. */
+  const w = 400;
+  ctx.font = '12px system-ui, sans-serif';
+  const lignes = lignesDe(confirmation.texte, w - 32);
+  const h = Math.max(150, 48 + lignes.length * 17 + 64);
+  const x = (LARGEUR - w) / 2, y = Math.round((HAUTEUR - h) / 2);
   ctx.fillStyle = '#1b2030'; ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = 'rgba(111,208,232,.6)'; ctx.lineWidth = 2;
   ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
@@ -772,39 +833,78 @@ function dessinerConfirmation() {
 
   ctx.font = '12px system-ui, sans-serif';
   ctx.fillStyle = '#e6e8f0';
-  let ligne = '', yy = y + 48;
-  for (const mot of confirmation.texte.split(' ')) {
-    const essai = ligne ? ligne + ' ' + mot : mot;
-    if (ctx.measureText(essai).width > w - 32 && ligne) {
-      ctx.fillText(ligne, x + 16, yy); yy += 17; ligne = mot;
-    } else ligne = essai;
-  }
-  if (ligne) ctx.fillText(ligne, x + 16, yy);
+  lignes.forEach((l, i) => ctx.fillText(l, x + 16, y + 48 + i * 17));
 
-  const bw = 168, bh = 30, by = y + h - 44;
+  /* LES DEUX REPONSES SE CHOISISSENT AUX FLECHES.
+
+     Avant : Entree valait « oui », Echap valait « non », et rien d'autre. Pas
+     de selection visible, pas de fleches — et Echap, en plein ecran, ne
+     parvient pas au jeu. Il ne restait donc au clavier qu'un seul bouton
+     utilisable : acheter.
+
+     `confirmation.choix` dit lequel des deux est allume ; ← → le deplacent,
+     Entree valide CELUI-LA. La souris qui bouge au-dessus d'un bouton prend la
+     selection, comme dans tous les autres menus du jeu. */
+  const bw = 168, bh = 30, by = y + h - 56;
   [['Affirmatif', 'confirmer-oui', x + 16],
-   ['Tout compte fait, non', 'confirmer-non', x + w - 16 - bw]].forEach(([t, a, bx]) => {
+   ['Tout compte fait, non', 'confirmer-non', x + w - 16 - bw]].forEach(([t, a, bx], i) => {
     const survol = souris.survol && souris.survol.action === a;
+    if (survol && souris.bouge) confirmation.choix = i;
+    const choisi = confirmation.choix === i;
     const positif = a === 'confirmer-oui';
-    ctx.fillStyle = survol
-      ? (positif ? 'rgba(232,182,44,.28)' : 'rgba(255,255,255,.16)')
-      : 'rgba(255,255,255,.07)';
+    ctx.fillStyle = choisi
+      ? (positif ? 'rgba(232,182,44,.28)' : 'rgba(255,255,255,.18)')
+      : 'rgba(255,255,255,.05)';
     ctx.fillRect(bx, by, bw, bh);
-    ctx.strokeStyle = positif ? 'rgba(232,182,44,.6)' : 'rgba(255,255,255,.25)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(bx + .5, by + .5, bw - 1, bh - 1);
-    ctx.font = '12px system-ui, sans-serif';
+    ctx.strokeStyle = choisi ? (positif ? ACCENT : '#e6e8f0')
+                             : (positif ? 'rgba(232,182,44,.35)' : 'rgba(255,255,255,.18)');
+    ctx.lineWidth = choisi ? 2 : 1;
+    ctx.strokeRect(bx + (choisi ? 1 : .5), by + (choisi ? 1 : .5),
+                   bw - (choisi ? 2 : 1), bh - (choisi ? 2 : 1));
+    ctx.font = (choisi ? 'bold ' : '') + '12px system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillStyle = positif ? '#ffe9a8' : 'rgba(255,255,255,.75)';
-    ctx.fillText(t, bx + bw / 2, by + 20);
+    ctx.fillStyle = choisi ? (positif ? '#ffe9a8' : '#ffffff')
+                           : (positif ? 'rgba(255,233,168,.55)' : 'rgba(255,255,255,.5)');
+    ctx.fillText((choisi ? '▸ ' : '') + t, bx + bw / 2, by + 20);
     ctx.textAlign = 'left';
     zone(bx, by, bw, bh, a);
   });
+
+  texteCentreEn(estTactile ? 'Touche une réponse' : '← → choisir  ·  Entrée valider',
+                LARGEUR / 2, y + h - 10, '9px system-ui, sans-serif', 'rgba(255,255,255,.34)');
 }
 
 function demanderConfirmation(texte, oui) {
-  confirmation = { texte, oui };
+  confirmation = { texte, oui, choix: 0 };
   audio.bruit('menu');
+}
+
+/* Une touche pendant qu'une question est posee. Vrai si elle a ete prise :
+   `auClavier` s'arrete alors la, quelle que soit la scene — la question passe
+   avant tout le reste, partout ou elle peut etre posee (boutique, base, pause,
+   menu, options). */
+const SCENES_A_QUESTION = ['menu', 'options', 'pause', 'hub', 'boutique'];
+
+function toucheConfirmation(e, lettre, valider, annuler) {
+  if (!confirmation) return false;
+  /* Une question n'existe que la ou elle se DESSINE. Si la scene a change
+     sous elle, elle est perimee : la garder avalerait toutes les touches d'un
+     ecran qui ne la montre pas. */
+  if (SCENES_A_QUESTION.indexOf(scene) < 0) { confirmation = null; return false; }
+  const horizontale = e.code === 'ArrowLeft' || e.code === 'ArrowRight'
+                   || lettre === 'q' || lettre === 'a' || lettre === 'd';
+  const verticale = e.code === 'ArrowUp' || e.code === 'ArrowDown'
+                 || lettre === 'z' || lettre === 'w' || lettre === 's';
+  if (horizontale || verticale) {
+    // Deux reponses seulement : n'importe quelle fleche passe a l'autre.
+    confirmation.choix = confirmation.choix ? 0 : 1;
+    audio.bruit('menu');
+  } else if (valider) {
+    repondreConfirmation(confirmation.choix === 0);
+  } else if (annuler) {
+    repondreConfirmation(false);
+  }
+  return true;
 }
 
 function repondreConfirmation(accepte) {
@@ -886,11 +986,18 @@ function dessinerBoutique() {
   });
 
   const liste = articlesBoutique();
-  let y = 118;
+  /* Le pas d'une rangee se DEDUIT du nombre d'articles, comme au jukebox. Il
+     valait 46 px en dur : quatre bonus permanents tenaient, le cinquieme (la
+     regeneration) descendait sur la ligne d'aide et sur le bouton « Sortir ». */
+  const pas = pasBoutique(liste.length);
+  const hRangee = pas - 6;
+  let y = BOUTIQUE_Y0 + 14;
   liste.forEach((a, i) => {
-    const actif = i === indexBoutique;
     const survol = souris.survol && souris.survol.action === 'article' && souris.survol.valeur === i;
-    if (survol && souris.bouge && i !== indexBoutique) indexBoutique = i;
+    if (survol && souris.bouge && (i !== indexBoutique || focusSortir)) {
+      indexBoutique = i; focusSortir = false;
+    }
+    const actif = i === indexBoutique && !focusSortir;
 
     const basique = ongletBoutique === 0;
     const secret = ongletBoutique === 2;
@@ -902,8 +1009,8 @@ function dessinerBoutique() {
     const abordable = secret ? (partie.piecesSecretes || 0) >= prix : partie.pieces >= prix;
 
     ctx.fillStyle = actif ? 'rgba(232,182,44,.13)' : 'rgba(255,255,255,.03)';
-    ctx.fillRect(56, y - 14, LARGEUR - 112, 40);
-    if (actif) { ctx.fillStyle = ACCENT; ctx.fillRect(56, y - 14, 3, 40); }
+    ctx.fillRect(56, y - 14, LARGEUR - 112, hRangee);
+    if (actif) { ctx.fillStyle = ACCENT; ctx.fillRect(56, y - 14, 3, hRangee); }
 
     ctx.font = (actif ? 'bold ' : '') + '12px system-ui, sans-serif';
     ctx.fillStyle = maxi ? 'rgba(126,224,138,.9)' : '#e6e8f0';
@@ -942,8 +1049,8 @@ function dessinerBoutique() {
     }
     ctx.textAlign = 'left';
 
-    zone(56, y - 14, LARGEUR - 112, 40, 'article', i);
-    y += 46;
+    zone(56, y - 14, LARGEUR - 112, hRangee, 'article', i);
+    y += pas;
   });
 
   /* Ce qui viendra. On le dit clairement plutot que de laisser croire que la
@@ -957,9 +1064,19 @@ function dessinerBoutique() {
 
   ctx.font = '9px system-ui, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,.3)';
-  ctx.fillText('↑ ↓ choisir  ·  ← → onglet  ·  Entrée acheter  ·  Échap sortir', 56, HAUTEUR - 33);
+  ctx.fillText('↑ ↓ choisir  ·  ← → onglet  ·  Entrée acheter  ·  « Sortir » : tout en bas de la liste',
+               56, HAUTEUR - 33);
 
   dessinerConfirmation();
+}
+
+/* La liste de la boutique tient entre les onglets et la ligne d'aide. */
+const BOUTIQUE_Y0 = 104;
+const BOUTIQUE_Y1 = 304;
+
+function pasBoutique(n) {
+  if (n <= 0) return 46;
+  return Math.max(30, Math.min(46, Math.floor((BOUTIQUE_Y1 - BOUTIQUE_Y0) / n)));
 }
 
 function acheterArticleCourant() {
@@ -991,7 +1108,8 @@ function acheterArticleCourant() {
 
   demanderConfirmation(
     'Es-tu sûr de vouloir passer la transaction ? « ' + a.nom + ' » pour ' + prix +
-    (secret ? ' Brad Coin secret. ' : ' Brad Coins. ') + a.phrase,
+    (secret ? (prix > 1 ? ' Brad Coins secrets. ' : ' Brad Coin secret. ') : ' Brad Coins. ') +
+    a.phrase,
     () => {
       const ok = basique ? acheterAmelioration(a)
                : secret ? acheterSecret(a)
@@ -1042,9 +1160,11 @@ function dessinerVestiaire() {
   UNIFORMES.forEach((u, i) => {
     const c = i % cols, r = Math.floor(i / cols);
     const x = x0 + c * cw, y = y0 + r * ch;
-    const actif = i === indexVestiaire;
     const survol = souris.survol && souris.survol.action === 'uniforme' && souris.survol.valeur === i;
-    if (survol && souris.bouge && i !== indexVestiaire) indexVestiaire = i;
+    if (survol && souris.bouge && (i !== indexVestiaire || focusSortir)) {
+      indexVestiaire = i; focusSortir = false;
+    }
+    const actif = i === indexVestiaire && !focusSortir;
 
     const ouvert = uniformeDebloque(u);
     const porte = partie.uniforme === u.cle;
@@ -1120,7 +1240,7 @@ function dessinerVestiaire() {
 
   ctx.font = '9px system-ui, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,.3)';
-  ctx.fillText('Flèches choisir  ·  Entrée porter  ·  Échap sortir', 56, HAUTEUR - 33);
+  ctx.fillText('Flèches choisir  ·  Entrée porter  ·  ↓ jusqu\'à « Sortir »', 56, HAUTEUR - 33);
 }
 
 /* -----------------------------------------------------------------------------
@@ -1275,9 +1395,11 @@ function dessinerCarte() {
     const i = debut + k;
     const d = NIVEAUX[id];
     const y = y0 + k * CARTE_LIGNE;
-    const actif = i === indexCarte;
     const survol = souris.survol && souris.survol.action === 'niveau' && souris.survol.valeur === i;
-    if (survol && souris.bouge && i !== indexCarte) indexCarte = i;
+    if (survol && souris.bouge && (i !== indexCarte || focusSortir)) {
+      indexCarte = i; focusSortir = false;
+    }
+    const actif = i === indexCarte && !focusSortir;
 
     const ouvert = niveauDebloque(id);
     const fini = niveauTermine(id);
@@ -1346,7 +1468,8 @@ function dessinerCarte() {
   ctx.fillText(route, 68, bas + 20);
 
   ctx.fillStyle = 'rgba(255,255,255,.3)';
-  ctx.fillText('↑ ↓ choisir  ·  Entrée partir en mission  ·  Échap sortir', 56, HAUTEUR - 33);
+  ctx.fillText('↑ ↓ choisir  ·  Entrée partir en mission  ·  « Sortir » : tout en bas de la liste',
+               56, HAUTEUR - 33);
 }
 
 function lancerNiveauCourant() {

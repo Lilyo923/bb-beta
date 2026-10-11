@@ -2170,16 +2170,35 @@ function dessinerTourelle() {
   ctx.ellipse(x, y + 26, 7, 2.5, 0, 0, 6.2832);
   ctx.fill();
 
-  ctx.fillStyle = '#2b3042';
-  ctx.fillRect(x - 7, y - 5, 14, 11);
-  ctx.fillStyle = '#434b63';
-  ctx.fillRect(x - 7, y - 5, 14, 3);
-  // Le canon, du cote ou regarde Brad.
-  ctx.fillStyle = '#767f9c';
-  ctx.fillRect(x + (brad.sens > 0 ? 6 : -11), y - 1, 5, 4);
+  /* BROUILLEE par un gardien : elle tressaute, son canon pend, sa diode
+     clignote en rouge et des parasites la traversent. On doit comprendre d'un
+     coup d'oeil qu'elle est la, qu'elle ne tire pas, et que c'est voulu. */
+  const brouillee = tourelle.brouillee;
+  const tremble = brouillee ? Math.round(Math.sin(tourelle.phase * 31) * 1.2) : 0;
+  const bx = x + tremble;
+
+  ctx.fillStyle = brouillee ? '#262a36' : '#2b3042';
+  ctx.fillRect(bx - 7, y - 5, 14, 11);
+  ctx.fillStyle = brouillee ? '#363b4a' : '#434b63';
+  ctx.fillRect(bx - 7, y - 5, 14, 3);
+  // Le canon, du cote ou regarde Brad — affaisse quand elle est en veille.
+  ctx.fillStyle = brouillee ? '#555b6e' : '#767f9c';
+  if (brouillee) ctx.fillRect(bx + (brad.sens > 0 ? 6 : -9), y + 1, 3, 6);
+  else ctx.fillRect(bx + (brad.sens > 0 ? 6 : -11), y - 1, 5, 4);
   // La diode : verte quand elle peut tirer, rouge quand elle recharge.
-  ctx.fillStyle = tourelle.recharge > 0 ? 'rgba(226,85,59,.85)' : 'rgba(126,224,138,.95)';
-  ctx.fillRect(x - 2, y + 1, 3, 3);
+  if (brouillee) {
+    const allumee = Math.floor(tourelle.phase * 5) % 2 === 0;
+    ctx.fillStyle = allumee ? '#ff5a48' : 'rgba(226,85,59,.25)';
+    ctx.fillRect(bx - 2, y + 1, 3, 3);
+    // Parasites : deux traits qui sautent d'une image a l'autre.
+    ctx.fillStyle = 'rgba(255,138,122,.75)';
+    const k = Math.floor(tourelle.phase * 14);
+    ctx.fillRect(bx - 10 + (k * 7) % 18, y - 9 + (k * 5) % 6, 3, 1);
+    ctx.fillRect(bx - 9 + (k * 11) % 16, y + 8 - (k * 3) % 5, 2, 1);
+  } else {
+    ctx.fillStyle = tourelle.recharge > 0 ? 'rgba(226,85,59,.85)' : 'rgba(126,224,138,.95)';
+    ctx.fillRect(bx - 2, y + 1, 3, 3);
+  }
   ctx.restore();
 }
 
@@ -2349,6 +2368,15 @@ function hud() {
     ctx.fillRect(x0 + i * 9, y0, 7, 9);
     if (plein) { ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(x0 + i * 9, y0, 7, 2); }
   }
+  /* La regeneration se LIT : la prochaine case de vie se remplit en vert, de
+     bas en haut, et devient rouge quand elle est pleine. Sans ce repere, le
+     bonus a trente Brad Coins serait invisible onze secondes sur douze. */
+  if (aPermanent('regeneration') && brad.pv > 0 && brad.pv < brad.pvMax) {
+    const f = Math.max(0, Math.min(1, (brad.regen || 0) / REGEN_PERIODE));
+    const hr = Math.round(9 * f);
+    ctx.fillStyle = 'rgba(126,224,138,.9)';
+    ctx.fillRect(x0 + brad.pv * 9, y0 + 9 - hr, 7, hr);
+  }
 
   // Jauge de Brad-Shy
   const jx = x0, jy = y0 + 13, jl = 96;
@@ -2425,13 +2453,19 @@ function ecranDeMort() {
 
   // Un vrai bouton, et pas seulement « appuie sur Espace » : au doigt, il n'y
   // a pas de clavier. N'importe quel endroit de l'écran relance aussi.
+  /* Deux boutons, et le clavier choisit entre les deux avec ↑ ↓ : « Retour à
+     la base » n'etait atteignable qu'a la souris ou par Echap. */
+  const base = baseAccessible();
+  if (!base) choixMort = 0;
   const l = 148, h = 32, x = (LARGEUR - l) / 2, y = HAUTEUR / 2 + 58;
   const survol = souris.survol && souris.survol.action === 'relancer-mort';
-  ctx.fillStyle = survol ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.1)';
+  if (survol && souris.bouge) choixMort = 0;
+  const choisi = choixMort === 0;
+  ctx.fillStyle = choisi ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.08)';
   ctx.fillRect(x, y, l, h);
-  ctx.strokeStyle = 'rgba(255,225,225,.7)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x + .5, y + .5, l - 1, h - 1);
+  ctx.strokeStyle = choisi ? '#ffe9e9' : 'rgba(255,225,225,.4)';
+  ctx.lineWidth = choisi ? 2 : 1;
+  ctx.strokeRect(x + (choisi ? 1 : .5), y + (choisi ? 1 : .5), l - (choisi ? 2 : 1), h - (choisi ? 2 : 1));
   texteCentre('RÉESSAYER', y + 21, 'bold 14px system-ui, sans-serif', '#ffe9e9');
   zone(x, y, l, h, 'relancer-mort');
 
@@ -2439,12 +2473,20 @@ function ecranDeMort() {
   // base existe. Pendant le tout premier niveau, la seule issue est de
   // reessayer : on ne fuit pas une introduction qu'on n'a jamais finie.
   let yb = y + h + 8;
-  if (baseAccessible()) {
+  if (base) {
     const lb = 118, xb = LARGEUR / 2 - lb / 2;
     const survolB = souris.survol && souris.survol.action === 'mort-hub';
-    ctx.fillStyle = survolB ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.05)';
+    if (survolB && souris.bouge) choixMort = 1;
+    const choisiB = choixMort === 1;
+    ctx.fillStyle = choisiB ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.05)';
     ctx.fillRect(xb, yb, lb, 22);
-    texteCentre('Retour à la base', yb + 15, '10px system-ui, sans-serif', 'rgba(255,255,255,.6)');
+    if (choisiB) {
+      ctx.strokeStyle = '#ffe9e9';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(xb + .5, yb + .5, lb - 1, 21);
+    }
+    texteCentre('Retour à la base', yb + 15, (choisiB ? 'bold ' : '') + '10px system-ui, sans-serif',
+                choisiB ? '#ffe9e9' : 'rgba(255,255,255,.6)');
     zone(xb, yb, lb, 22, 'mort-hub');
     yb += 28;
   } else {
@@ -2453,7 +2495,8 @@ function ecranDeMort() {
     yb += 20;
   }
 
-  texteCentre(estTactile ? 'Touche l\'écran pour repartir' : 'Espace, Entrée ou clic',
+  texteCentre(estTactile ? 'Touche l\'écran pour repartir'
+                         : (base ? '↑ ↓ choisir · Espace ou Entrée valider' : 'Espace, Entrée ou clic'),
               yb + 8, '10px system-ui, sans-serif', 'rgba(255,255,255,.35)');
 }
 
@@ -2679,7 +2722,21 @@ function imageDuJeu(maintenant) {
   accumulateur += delta;
   let garde = 0;
   while (accumulateur >= PAS && garde++ < 8) {
-    if (scene === 'jeu') {
+    if (scene === 'jeu' && transition.actif) {
+      /* LE MONDE RETIENT SON SOUFFLE PENDANT LE FONDU.
+
+         Le changement de decor dure une seconde, dont une demie dans le noir
+         complet — et la simulation continuait de tourner derriere. Brad
+         parcourait jusqu'a huit tuiles a l'aveugle (mesure faite, en courant)
+         et la garde de la zone suivante, reveillee au milieu du fondu, venait
+         a sa rencontre : au niveau 1, il encaissait un coup du premier Serra
+         de la grotte AVANT d'avoir pu le voir.
+
+         Tout s'arrete donc le temps du fondu — Brad, les ennemis, les
+         plateformes, le chronometre. Vitesse et elan sont conserves tels
+         quels : on repart exactement ou l'on en etait, l'ecran rallume. */
+      majTransition(PAS);
+    } else if (scene === 'jeu') {
       chrono += PAS;
       majMobiles(PAS);          // avant Brad : il doit se poser sur leur
       majTerrain(PAS);          // position de cette image, pas la precedente
@@ -2736,6 +2793,22 @@ function imageDuJeu(maintenant) {
     audio.maj(PAS);
     accumulateur -= PAS;
   }
+
+  /* LE RETARD NE SE RATTRAPE PAS.
+
+     La boucle ci-dessus simule au plus huit pas par image — c'est le garde-fou
+     qui empeche une image lente d'en commander une plus lente encore. Mais ce
+     qu'elle n'avait pas eu le temps de simuler RESTAIT dans l'accumulateur, et
+     s'y empilait image apres image. Mesure faite dans un onglet ralenti a deux
+     images par seconde : plus de trois secondes de retard en reserve. Des que
+     l'affichage redevenait fluide, le jeu les depensait a raison de huit pas
+     par image — quatre fois la vitesse normale — jusqu'a epuisement. Brad, les
+     ennemis et le chronometre s'emballaient sans que le joueur ait rien fait.
+
+     Quand on est en retard, on le perd : le jeu ralentit tant que la machine
+     peine (c'etait deja le cas), et il reprend a vitesse normale ensuite. En
+     marche normale il reste ici moins d'un pas, et cette ligne ne fait rien. */
+  if (accumulateur >= PAS) accumulateur = 0;
 
   rendu();
 }
